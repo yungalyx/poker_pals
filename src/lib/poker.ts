@@ -111,9 +111,9 @@ export function evaluateHand(holeCards: Card[], board: Card[]): { rank: HandRank
     for (let i = 0; i <= flushRanks.length - 5; i++) {
       if (flushRanks[i] - flushRanks[i + 4] === 4) {
         if (flushRanks[i] === 12) {
-          return { rank: 'royal-flush', strength: 1000, description: 'Royal Flush' }
+          return { rank: 'royal-flush', strength: 1200, description: 'Royal Flush' }
         }
-        return { rank: 'straight-flush', strength: 900 + flushRanks[i], description: 'Straight Flush' }
+        return { rank: 'straight-flush', strength: 1100 + flushRanks[i], description: 'Straight Flush' }
       }
     }
   }
@@ -133,23 +133,24 @@ export function evaluateHand(holeCards: Card[], board: Card[]): { rank: HandRank
     .map(([rank]) => rank)
 
   if (quads > 0) {
-    return { rank: 'four-of-a-kind', strength: 800 + getRankValue(sortedRanks[0]), description: `Four ${sortedRanks[0]}s` }
+    return { rank: 'four-of-a-kind', strength: 1000 + getRankValue(sortedRanks[0]), description: `Four ${sortedRanks[0]}s` }
   }
 
   if (trips > 0 && pairs > 0) {
-    return { rank: 'full-house', strength: 700 + getRankValue(sortedRanks[0]) * 13 + getRankValue(sortedRanks[1]), description: `Full House, ${sortedRanks[0]}s full of ${sortedRanks[1]}s` }
+    return { rank: 'full-house', strength: 800 + getRankValue(sortedRanks[0]) * 13 + getRankValue(sortedRanks[1]), description: `Full House, ${sortedRanks[0]}s full of ${sortedRanks[1]}s` }
   }
 
   if (flushSuit) {
-    return { rank: 'flush', strength: 600, description: 'Flush' }
+    const flushHighCard = Math.max(...suitCounts[flushSuit].map(getRankValue))
+    return { rank: 'flush', strength: 700 + flushHighCard, description: 'Flush' }
   }
 
   if (straightHigh !== null) {
-    return { rank: 'straight', strength: 500 + straightHigh, description: 'Straight' }
+    return { rank: 'straight', strength: 600 + straightHigh, description: 'Straight' }
   }
 
   if (trips > 0) {
-    return { rank: 'three-of-a-kind', strength: 400 + getRankValue(sortedRanks[0]), description: `Three ${sortedRanks[0]}s` }
+    return { rank: 'three-of-a-kind', strength: 500 + getRankValue(sortedRanks[0]), description: `Three ${sortedRanks[0]}s` }
   }
 
   if (pairs >= 2) {

@@ -2,8 +2,10 @@
 
 import { useRef, useState } from 'react'
 import { toJpeg } from 'html-to-image'
-import type { AnalysisResult } from '@/types/analysis'
+import type { AnalysisResult, ActionEntry } from '@/types/analysis'
 import { ShareCard } from './ShareCard'
+import { Hand, Board } from '@/components/poker'
+import { evaluateHand } from '@/lib/poker'
 
 interface AnalysisSummaryProps {
   analysis: AnalysisResult
@@ -22,6 +24,7 @@ export function AnalysisSummary({ analysis, onNewSession, onExit }: AnalysisSumm
     strengths,
     weaknesses,
     recommendations,
+    lastHand,
   } = analysis
 
   const shareCardRef = useRef<HTMLDivElement>(null)
@@ -101,6 +104,9 @@ export function AnalysisSummary({ analysis, onNewSession, onExit }: AnalysisSumm
             <span className="text-gray-500"> in {handsPlayed} hands</span>
           </p>
         </div>
+
+        {/* Last Hand Summary */}
+        {lastHand && <LastHandSummary hand={lastHand} decisions={analysis.decisions} />}
 
         {/* Overall score */}
         <div className="text-center">
@@ -658,6 +664,208 @@ function StyleSpectrum({
           {tooltip}
           <div className="absolute top-full left-4 border-4 border-transparent border-t-gray-900" />
         </div>
+      </div>
+    </div>
+  )
+}
+
+function LastHandSummary({
+  hand,
+  decisions,
+}: {
+  hand: NonNullable<AnalysisResult['lastHand']>
+  decisions: AnalysisResult['decisions']
+}) {
+  const boardToShow = hand.fullBoard || hand.board
+  const heroResult = evaluateHand(hand.heroCards, boardToShow)
+  const villainResult = evaluateHand(hand.villainCards, boardToShow)
+
+  // Get decisions for this hand
+  const handDecisions = decisions.filter(d => d.handNumber === hand.handNumber)
+
+  // Determine result type
+  const heroFolded = hand.actionHistory?.some(
+    a => a.actor === 'hero' && a.action === 'folds'
+  )
+  const villainFolded = hand.actionHistory?.some(
+    a => a.actor === 'villain' && a.action === 'folds'
+  )
+
+  // Calculate pot won/lost
+  let resultAmount = ''
+  let resultColor = ''
+  let resultLabel = ''
+
+  if (hand.winner === 'hero') {
+    resultAmount = `+$${hand.pot}`
+    resultColor = 'text-green-600 dark:text-green-400'
+    resultLabel = villainFolded ? 'Villain Folded' : 'You Won'
+  } else if (hand.winner === 'tie') {
+    resultAmount = `+$${Math.floor(hand.pot / 2)}`
+    resultColor = 'text-yellow-600 dark:text-yellow-400'
+    resultLabel = 'Split Pot'
+  } else {
+    resultAmount = heroFolded ? 'Folded' : `-$${hand.pot}`
+    resultColor = heroFolded ? 'text-gray-500' : 'text-red-600 dark:text-red-400'
+    resultLabel = heroFolded ? 'You Folded' : 'Villain Won'
+  }
+
+  // Group actions by street for display
+  const streets = ['preflop', 'flop', 'turn', 'river', 'showdown'] as const
+  const groupedActions: Record<string, ActionEntry[]> = {}
+  for (const action of hand.actionHistory || []) {
+    if (!groupedActions[action.street]) {
+      groupedActions[action.street] = []
+    }
+    groupedActions[action.street].push(action)
+  }
+
+  const formatCard = (card: string) => {
+    if (!card || typeof card !== 'string') return '??'
+    const suitSymbols: Record<string, string> = {
+      s: '\u2660',
+      h: '\u2665',
+      d: '\u2666',
+      c: '\u2663',
+    }
+    const rank = card.slice(0, -1)
+    const suit = card.slice(-1)
+    return `${rank}${suitSymbols[suit] || suit}`
+  }
+
+  const getActorColor = (actor: string) => {
+    switch (actor) {
+      case 'hero': return 'text-blue-600 dark:text-blue-400'
+      case 'villain': return 'text-red-600 dark:text-red-400'
+      case 'dealer': return 'text-gray-500 dark:text-gray-400'
+      default: return ''
+    }
+  }
+
+  const getActorLabel = (actor: string) => {
+    switch (actor) {
+      case 'hero': return 'You'
+      case 'villain': return 'Villain'
+      case 'dealer': return 'Dealer'
+      default: return actor
+    }
+  }
+
+  return (
+    <div className="bg-gray-100 dark:bg-gray-800 rounded-xl overflow-hidden">
+      <div className="bg-gray-200 dark:bg-gray-700 px-6 py-3">
+        <h3 className="font-semibold text-lg">Final Hand #{hand.handNumber}</h3>
+      </div>
+
+      <div className="p-6 space-y-6">
+        {/* Result header */}
+        <div className="flex items-center justify-between">
+          <div>
+            <span className={`text-2xl font-bold ${resultColor}`}>{resultAmount}</span>
+            <span className="ml-2 text-gray-500">{resultLabel}</span>
+          </div>
+          <span className="text-sm text-gray-500">
+            {hand.heroPosition === 'BTN' ? 'You were Button' : 'You were Big Blind'}
+          </span>
+        </div>
+
+        {/* Cards display */}
+        <div className="bg-green-800 dark:bg-green-900 rounded-xl p-4">
+          {/* Board */}
+          <div className="flex justify-center mb-4">
+            <Board cards={boardToShow} />
+          </div>
+
+          {/* Hands */}
+          <div className="flex justify-center gap-8">
+            <div className="text-center">
+              <Hand cards={hand.villainCards} label="Villain" />
+              {!heroFolded && !villainFolded && (
+                <p className="text-white text-sm mt-2">{villainResult.description}</p>
+              )}
+            </div>
+            <div className="text-center">
+              <Hand cards={hand.heroCards} label="You" highlight />
+              {!heroFolded && !villainFolded && (
+                <p className="text-white text-sm mt-2">{heroResult.description}</p>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Action History */}
+        <div>
+          <h4 className="font-semibold text-sm mb-3 text-gray-700 dark:text-gray-300">
+            Hand History
+          </h4>
+          <div className="space-y-3 bg-white dark:bg-gray-900 rounded-lg p-4 max-h-64 overflow-y-auto">
+            {streets.map((street) => {
+              const streetActions = groupedActions[street]
+              if (!streetActions || streetActions.length === 0) return null
+
+              return (
+                <div key={street}>
+                  <div className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">
+                    {street}
+                  </div>
+                  <div className="space-y-1">
+                    {streetActions.map((action, idx) => (
+                      <div key={idx} className="text-sm flex items-center gap-2">
+                        <span className={`font-medium ${getActorColor(action.actor)}`}>
+                          {getActorLabel(action.actor)}
+                        </span>
+                        <span className="text-gray-600 dark:text-gray-300">
+                          {action.action}
+                          {action.cards && action.cards.length > 0 && (
+                            <span className="ml-1 font-mono">
+                              [{action.cards.map(formatCard).join(' ')}]
+                            </span>
+                          )}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+
+        {/* Decision Analysis */}
+        {handDecisions.length > 0 && (
+          <div>
+            <h4 className="font-semibold text-sm mb-3 text-gray-700 dark:text-gray-300">
+              Your Decisions
+            </h4>
+            <div className="space-y-2">
+              {handDecisions.map((decision, idx) => (
+                <div
+                  key={idx}
+                  className={`p-3 rounded-lg ${
+                    decision.wasOptimal
+                      ? 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800'
+                      : 'bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800'
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="font-medium capitalize">
+                      {decision.street}: {decision.action}
+                      {decision.betAmount ? ` $${decision.betAmount}` : ''}
+                    </span>
+                    <span className={decision.wasOptimal ? 'text-green-600' : 'text-red-600'}>
+                      {decision.wasOptimal ? '\u2713 Optimal' : '\u2717 Suboptimal'}
+                    </span>
+                  </div>
+                  {!decision.wasOptimal && (
+                    <p className="text-sm mt-1 text-gray-600 dark:text-gray-400">
+                      Better: {decision.optimalAction} \u2014 {decision.reasoning}
+                    </p>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )

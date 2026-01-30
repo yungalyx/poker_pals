@@ -796,6 +796,11 @@ export function generateAnalysis(state: AnalysisGameState): AnalysisResult {
     strengths.push('Balanced hand selection')
   }
 
+  // Get the last hand from history
+  const lastHand = state.handHistory.length > 0
+    ? state.handHistory[state.handHistory.length - 1]
+    : null
+
   return {
     handsPlayed: state.handsPlayed,
     profit,
@@ -808,5 +813,6 @@ export function generateAnalysis(state: AnalysisGameState): AnalysisResult {
     strengths,
     weaknesses,
     recommendations,
+    lastHand,
   }
 }

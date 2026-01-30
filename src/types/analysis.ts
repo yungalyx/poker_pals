@@ -80,6 +80,7 @@ export interface AnalysisResult {
   strengths: string[]
   weaknesses: string[]
   recommendations: string[]
+  lastHand: HandState | null // The final hand of the session
 }
 
 // Analysis mode game state
