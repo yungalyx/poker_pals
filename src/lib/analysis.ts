@@ -82,6 +82,7 @@ export function dealNewHand(state: AnalysisGameState): AnalysisGameState {
     ...state,
     mode: 'playing',
     currentHand: newHand,
+    currentStack: state.currentStack - blinds, // Deduct blinds immediately when posted
   }
 }
 

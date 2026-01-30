@@ -1,6 +1,9 @@
 'use client'
 
+import { useRef, useState } from 'react'
+import { toJpeg } from 'html-to-image'
 import type { AnalysisResult } from '@/types/analysis'
+import { ShareCard } from './ShareCard'
 
 interface AnalysisSummaryProps {
   analysis: AnalysisResult
@@ -12,7 +15,6 @@ export function AnalysisSummary({ analysis, onNewSession, onExit }: AnalysisSumm
   const {
     handsPlayed,
     profit,
-    targetProfit,
     reachedTarget,
     overallScore,
     scoreBreakdown,
@@ -22,6 +24,47 @@ export function AnalysisSummary({ analysis, onNewSession, onExit }: AnalysisSumm
     recommendations,
   } = analysis
 
+  const shareCardRef = useRef<HTMLDivElement>(null)
+  const [isGenerating, setIsGenerating] = useState(false)
+  const [showShareModal, setShowShareModal] = useState(false)
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+
+  const handleShare = async () => {
+    if (!shareCardRef.current) return
+
+    setIsGenerating(true)
+
+    try {
+      const dataUrl = await toJpeg(shareCardRef.current, {
+        cacheBust: true,
+        pixelRatio: 2, // Higher quality
+        quality: 0.95,
+      })
+
+      setPreviewUrl(dataUrl)
+      setShowShareModal(true)
+    } catch (err) {
+      console.error('Image generation failed:', err)
+    } finally {
+      setIsGenerating(false)
+    }
+  }
+
+  const handleSaveImage = () => {
+    if (!previewUrl) return
+
+    const link = document.createElement('a')
+    link.download = 'poker-pals-results.jpg'
+    link.href = previewUrl
+    link.click()
+    setShowShareModal(false)
+  }
+
+  const handleCloseModal = () => {
+    setShowShareModal(false)
+    setPreviewUrl(null)
+  }
+
   return (
     <div className="min-h-screen bg-background">
       <header className="border-b border-gray-200 dark:border-gray-800">
@@ -30,7 +73,7 @@ export function AnalysisSummary({ analysis, onNewSession, onExit }: AnalysisSumm
         </div>
       </header>
 
-      <main className="max-w-3xl mx-auto px-4 py-8 space-y-8">
+      <main className="max-w-3xl mx-auto px-4 py-8 space-y-8 relative">
         {/* Result banner */}
         <div
           className={`text-center p-6 rounded-xl ${
@@ -256,13 +299,74 @@ export function AnalysisSummary({ analysis, onNewSession, onExit }: AnalysisSumm
             Play Again
           </button>
           <button
+            onClick={handleShare}
+            disabled={isGenerating}
+            className="flex-1 py-3 bg-purple-600 hover:bg-purple-700 disabled:bg-purple-400 text-white font-semibold rounded-lg flex items-center justify-center gap-2"
+          >
+            {isGenerating ? (
+              <>
+                <span className="animate-spin">{'\u23F3'}</span>
+                Generating...
+              </>
+            ) : (
+              <>
+                {'\u{1F4F7}'} Share Results
+              </>
+            )}
+          </button>
+          <button
             onClick={onExit}
             className="flex-1 py-3 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 font-semibold rounded-lg"
           >
             Back to Lessons
           </button>
         </div>
+
+        {/* Hidden share card for image generation */}
+        <div className="absolute left-[-9999px] top-0" aria-hidden="true">
+          <ShareCard ref={shareCardRef} analysis={analysis} />
+        </div>
       </main>
+
+      {/* Share Preview Modal */}
+      {showShareModal && previewUrl && (
+        <div
+          className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4"
+          onClick={handleCloseModal}
+        >
+          <div
+            className="bg-white dark:bg-gray-800 rounded-2xl p-6 max-w-md w-full shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-xl font-bold text-center mb-4">Share Your Results</h3>
+
+            {/* Image preview */}
+            <div className="mb-6">
+              <img
+                src={previewUrl}
+                alt="Share card preview"
+                className="w-full rounded-2xl shadow-lg"
+              />
+            </div>
+
+            {/* Actions */}
+            <div className="flex gap-3">
+              <button
+                onClick={handleCloseModal}
+                className="flex-1 py-3 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 font-semibold rounded-xl"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveImage}
+                className="flex-1 py-3 bg-purple-600 hover:bg-purple-700 text-white font-semibold rounded-xl flex items-center justify-center gap-2"
+              >
+                {'\u2B07'} Save Image
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

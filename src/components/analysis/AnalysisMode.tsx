@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import type { Action } from '@/types'
 import type { AnalysisGameState, AnalysisResult, ActionEntry } from '@/types/analysis'
 import { Hand, Board, AnimatedHand, AnimatedBoard } from '@/components/poker'
@@ -18,6 +18,8 @@ interface AnalysisModeProps {
   onExit: () => void
 }
 
+const TIMER_DURATION = 30 // seconds
+
 export function AnalysisMode({ onExit }: AnalysisModeProps) {
   const [gameState, setGameState] = useState<AnalysisGameState>(() =>
     dealNewHand(createAnalysisSession(100, 1000, 20))
@@ -25,6 +27,10 @@ export function AnalysisMode({ onExit }: AnalysisModeProps) {
   const [analysis, setAnalysis] = useState<AnalysisResult | null>(null)
   const [showVillainCards, setShowVillainCards] = useState(false)
   const [buddyMode, setBuddyMode] = useState(true)
+  const [timerMode, setTimerMode] = useState(false)
+  const [showSettings, setShowSettings] = useState(false)
+  const [timeLeft, setTimeLeft] = useState(TIMER_DURATION)
+  const timerRef = useRef<NodeJS.Timeout | null>(null)
   const [lastFeedback, setLastFeedback] = useState<{
     type: 'correct' | 'warning' | 'error'
     message: string
@@ -35,7 +41,69 @@ export function AnalysisMode({ onExit }: AnalysisModeProps) {
   const profit = gameState.currentStack - gameState.startingStack
   const animationKey = gameState.handsPlayed
 
+  // Reset timer when hand changes or mode changes
+  const resetTimer = useCallback(() => {
+    setTimeLeft(TIMER_DURATION)
+    if (timerRef.current) {
+      clearInterval(timerRef.current)
+      timerRef.current = null
+    }
+  }, [])
+
+  // Auto-fold function
+  const autoFold = useCallback(() => {
+    if (gameState.mode === 'playing' && hand) {
+      const newState = processAction(gameState, 'fold')
+      setGameState(newState)
+      if (buddyMode) {
+        setLastFeedback({ type: 'error', message: 'Time ran out - auto-folded!', buttonType: 'fold' })
+      }
+      if (newState.mode === 'session-complete') {
+        setAnalysis(generateAnalysis(newState))
+      }
+    }
+  }, [gameState, hand, buddyMode])
+
+  // Timer effect
+  useEffect(() => {
+    if (!timerMode || gameState.mode !== 'playing' || !hand) {
+      resetTimer()
+      return
+    }
+
+    // Start the timer
+    setTimeLeft(TIMER_DURATION)
+    timerRef.current = setInterval(() => {
+      setTimeLeft((prev) => {
+        if (prev <= 1) {
+          if (timerRef.current) {
+            clearInterval(timerRef.current)
+            timerRef.current = null
+          }
+          return 0
+        }
+        return prev - 1
+      })
+    }, 1000)
+
+    return () => {
+      if (timerRef.current) {
+        clearInterval(timerRef.current)
+        timerRef.current = null
+      }
+    }
+  }, [timerMode, gameState.mode, hand?.handNumber, hand?.street, resetTimer])
+
+  // Auto-fold when timer hits 0
+  useEffect(() => {
+    if (timerMode && timeLeft === 0 && gameState.mode === 'playing' && hand) {
+      autoFold()
+    }
+  }, [timeLeft, timerMode, gameState.mode, hand, autoFold])
+
   const handleAction = (action: Action, betAmount?: number, buttonIndex?: number) => {
+    // Reset timer on any action
+    resetTimer()
     const newState = processAction(gameState, action, betAmount)
 
     // Determine which button was pressed
@@ -187,6 +255,7 @@ export function AnalysisMode({ onExit }: AnalysisModeProps) {
           profit={profit}
           targetProfit={gameState.targetProfit}
           onExit={onExit}
+          onOpenSettings={() => setShowSettings(true)}
         />
 
         <main className="max-w-3xl mx-auto px-4 py-8">
@@ -271,6 +340,7 @@ export function AnalysisMode({ onExit }: AnalysisModeProps) {
         profit={profit}
         targetProfit={gameState.targetProfit}
         onExit={onExit}
+        onOpenSettings={() => setShowSettings(true)}
       />
 
       <main className="max-w-5xl mx-auto px-4 py-8">
@@ -395,19 +465,8 @@ export function AnalysisMode({ onExit }: AnalysisModeProps) {
           </div>
         </div>
 
-        {/* Settings toggles */}
-        <div className="mt-4 flex justify-center gap-4">
-          <button
-            onClick={() => setBuddyMode(!buddyMode)}
-            className={`text-xs px-3 py-1.5 rounded-full flex items-center gap-1.5 transition-colors ${
-              buddyMode
-                ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300'
-                : 'bg-gray-200 dark:bg-gray-700 text-gray-500'
-            }`}
-          >
-            <span>{buddyMode ? '\u2705' : '\u25CB'}</span>
-            Buddy Mode
-          </button>
+        {/* Debug toggle for villain cards */}
+        <div className="mt-4 flex justify-center">
           <button
             onClick={() => setShowVillainCards(!showVillainCards)}
             className="text-xs text-gray-400 hover:text-gray-300"
@@ -416,6 +475,112 @@ export function AnalysisMode({ onExit }: AnalysisModeProps) {
           </button>
         </div>
       </main>
+
+      {/* Timer display - fixed on the side */}
+      {timerMode && gameState.mode === 'playing' && hand && (
+        <div className="fixed right-4 top-1/2 -translate-y-1/2 z-20">
+          <div
+            className={`w-20 h-20 rounded-full flex flex-col items-center justify-center font-bold shadow-lg border-4 ${
+              timeLeft <= 10
+                ? 'bg-red-100 dark:bg-red-900/50 border-red-500 text-red-600 dark:text-red-400'
+                : timeLeft <= 20
+                  ? 'bg-yellow-100 dark:bg-yellow-900/50 border-yellow-500 text-yellow-600 dark:text-yellow-400'
+                  : 'bg-gray-100 dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300'
+            }`}
+          >
+            <span className="text-2xl">{timeLeft}</span>
+            <span className="text-xs">sec</span>
+          </div>
+          {/* Progress ring */}
+          <svg className="absolute inset-0 w-20 h-20 -rotate-90" viewBox="0 0 80 80">
+            <circle
+              cx="40"
+              cy="40"
+              r="36"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="4"
+              className={`${
+                timeLeft <= 10
+                  ? 'text-red-500'
+                  : timeLeft <= 20
+                    ? 'text-yellow-500'
+                    : 'text-green-500'
+              }`}
+              strokeDasharray={`${(timeLeft / TIMER_DURATION) * 226} 226`}
+              strokeLinecap="round"
+            />
+          </svg>
+        </div>
+      )}
+
+      {/* Settings Modal */}
+      {showSettings && (
+        <div
+          className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4"
+          onClick={() => setShowSettings(false)}
+        >
+          <div
+            className="bg-white dark:bg-gray-800 rounded-2xl p-6 max-w-sm w-full shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-xl font-bold mb-6">Settings</h3>
+
+            <div className="space-y-4">
+              {/* Buddy Mode */}
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="font-medium">Buddy Mode</div>
+                  <div className="text-sm text-gray-500 dark:text-gray-400">
+                    Get feedback on your decisions
+                  </div>
+                </div>
+                <button
+                  onClick={() => setBuddyMode(!buddyMode)}
+                  className={`relative w-12 h-7 rounded-full transition-colors ${
+                    buddyMode ? 'bg-green-500' : 'bg-gray-300 dark:bg-gray-600'
+                  }`}
+                >
+                  <div
+                    className={`absolute top-1 w-5 h-5 bg-white rounded-full shadow transition-transform ${
+                      buddyMode ? 'translate-x-6' : 'translate-x-1'
+                    }`}
+                  />
+                </button>
+              </div>
+
+              {/* Timer Mode */}
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="font-medium">Timer Mode</div>
+                  <div className="text-sm text-gray-500 dark:text-gray-400">
+                    30 seconds to decide or auto-fold
+                  </div>
+                </div>
+                <button
+                  onClick={() => setTimerMode(!timerMode)}
+                  className={`relative w-12 h-7 rounded-full transition-colors ${
+                    timerMode ? 'bg-green-500' : 'bg-gray-300 dark:bg-gray-600'
+                  }`}
+                >
+                  <div
+                    className={`absolute top-1 w-5 h-5 bg-white rounded-full shadow transition-transform ${
+                      timerMode ? 'translate-x-6' : 'translate-x-1'
+                    }`}
+                  />
+                </button>
+              </div>
+            </div>
+
+            <button
+              onClick={() => setShowSettings(false)}
+              className="w-full mt-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl"
+            >
+              Done
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -427,6 +592,7 @@ function Header({
   profit,
   targetProfit,
   onExit,
+  onOpenSettings,
 }: {
   handsPlayed: number
   maxHands: number
@@ -434,6 +600,7 @@ function Header({
   profit: number
   targetProfit: number
   onExit: () => void
+  onOpenSettings: () => void
 }) {
   return (
     <header className="sticky top-0 bg-background/80 backdrop-blur border-b border-gray-200 dark:border-gray-800 z-10">
@@ -450,6 +617,7 @@ function Header({
           <span className="font-bold text-lg">Analysis Mode</span>
 
           <button
+            onClick={onOpenSettings}
             className="px-4 py-2 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 rounded-lg font-medium text-sm transition-colors"
           >
             {'\u2699'} Settings
