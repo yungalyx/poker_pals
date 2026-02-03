@@ -6,7 +6,7 @@ import { Card } from './Card'
 
 interface AnimatedCardProps {
   card: CardType
-  delay?: number // Delay in ms before animation starts
+  delay?: number
   size?: 'sm' | 'md' | 'lg'
   fromPosition?: 'top' | 'left' | 'right'
 }
@@ -19,14 +19,19 @@ export function AnimatedCard({
 }: AnimatedCardProps) {
   const [isVisible, setIsVisible] = useState(false)
   const [isFlipped, setIsFlipped] = useState(true)
+  const [rotation, setRotation] = useState(0)
 
   useEffect(() => {
-    // Start animation after delay
+    // Reset animation state when card changes
+    setIsVisible(false)
+    setIsFlipped(true)
+    // Random rotation between -5 and 5 degrees
+    setRotation((Math.random() - 0.5) * 10)
+
     const showTimer = setTimeout(() => {
       setIsVisible(true)
     }, delay)
 
-    // Flip card to reveal after sliding in
     const flipTimer = setTimeout(() => {
       setIsFlipped(false)
     }, delay + 300)
@@ -35,7 +40,7 @@ export function AnimatedCard({
       clearTimeout(showTimer)
       clearTimeout(flipTimer)
     }
-  }, [delay])
+  }, [delay, card])
 
   const getInitialTransform = () => {
     switch (fromPosition) {
@@ -50,7 +55,9 @@ export function AnimatedCard({
     <div
       className="relative transition-all duration-300 ease-out"
       style={{
-        transform: isVisible ? 'translateY(0) translateX(0)' : getInitialTransform(),
+        transform: isVisible
+          ? `translateY(0) translateX(0) rotate(${rotation}deg)`
+          : getInitialTransform(),
         opacity: isVisible ? 1 : 0,
       }}
     >
@@ -62,7 +69,7 @@ export function AnimatedCard({
         }}
       >
         {/* Front - actual card */}
-        <div style={{ backfaceVisibility: 'hidden' }}>
+        <div style={{ backfaceVisibility: 'hidden', overflow: 'visible' }}>
           <Card card={card} size={size} />
         </div>
 
@@ -72,6 +79,7 @@ export function AnimatedCard({
           style={{
             backfaceVisibility: 'hidden',
             transform: 'rotateY(180deg)',
+            overflow: 'visible',
           }}
         >
           <CardBack size={size} />
@@ -83,23 +91,35 @@ export function AnimatedCard({
 
 function CardBack({ size = 'md' }: { size?: 'sm' | 'md' | 'lg' }) {
   const sizes = {
-    sm: 'w-8 h-11',
-    md: 'w-12 h-16',
-    lg: 'w-16 h-22',
+    sm: 'w-10 h-14',
+    md: 'w-14 h-20',
+    lg: 'w-20 h-28',
   }
 
   return (
-    <div
-      className={`
-        ${sizes[size]}
-        bg-blue-800
-        border-2 border-blue-600
-        rounded-md
-        flex items-center justify-center
-        shadow-sm
-      `}
-    >
-      <div className="w-3/4 h-3/4 border border-blue-500 rounded-sm bg-blue-700" />
+    <div className="relative">
+      {/* Dotted outline shadow offset behind */}
+      <div
+        className={`
+          ${sizes[size]}
+          absolute top-1 left-1
+          border-2 border-dashed border-white/50
+          rounded-lg
+        `}
+      />
+      {/* Card back */}
+      <div
+        className={`
+          ${sizes[size]}
+          relative
+          bg-violet-500
+          border-2 border-violet-300
+          rounded-lg
+          flex items-center justify-center
+        `}
+      >
+        <div className="w-3/4 h-3/4 border-2 border-dashed border-white/30 rounded" />
+      </div>
     </div>
   )
 }

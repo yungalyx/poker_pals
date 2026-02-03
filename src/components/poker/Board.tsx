@@ -7,15 +7,14 @@ interface BoardProps {
 }
 
 export function Board({ cards, size = 'md' }: BoardProps) {
-  // Show 5 card slots, empty if not dealt
   const slots = [0, 1, 2, 3, 4]
 
   return (
     <div className="flex flex-col items-center gap-2">
-      <span className="text-xs text-gray-500 dark:text-gray-400 font-medium uppercase tracking-wide">
+      <span className="text-xs font-semibold uppercase tracking-widest opacity-70">
         Board
       </span>
-      <div className="flex gap-1">
+      <div className="flex gap-2">
         {slots.map((i) => (
           <div key={i}>
             {cards[i] ? (
@@ -32,18 +31,17 @@ export function Board({ cards, size = 'md' }: BoardProps) {
 
 function EmptySlot({ size = 'md' }: { size?: 'sm' | 'md' | 'lg' }) {
   const sizes = {
-    sm: 'w-8 h-11',
-    md: 'w-12 h-16',
-    lg: 'w-16 h-22',
+    sm: 'w-10 h-14',
+    md: 'w-14 h-20',
+    lg: 'w-20 h-28',
   }
 
   return (
     <div
       className={`
         ${sizes[size]}
-        bg-gray-200 dark:bg-gray-700
-        border border-dashed border-gray-400 dark:border-gray-500
-        rounded-md
+        border-2 border-dashed border-white/40
+        rounded-lg
       `}
     />
   )

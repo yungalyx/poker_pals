@@ -1,11 +1,91 @@
 'use client'
 
-import { useRef, useState } from 'react'
+import { useRef, useState, useEffect } from 'react'
 import { toJpeg } from 'html-to-image'
 import type { AnalysisResult, ActionEntry } from '@/types/analysis'
 import { ShareCard } from './ShareCard'
 import { Hand, Board } from '@/components/poker'
 import { evaluateHand } from '@/lib/poker'
+
+// Hook for animated counting
+function useCountUp(end: number, duration: number = 1000) {
+  const [count, setCount] = useState(0)
+
+  useEffect(() => {
+    let startTime: number
+    let animationFrame: number
+
+    const animate = (timestamp: number) => {
+      if (!startTime) startTime = timestamp
+      const progress = Math.min((timestamp - startTime) / duration, 1)
+
+      // Easing function for smooth deceleration
+      const eased = 1 - Math.pow(1 - progress, 3)
+      setCount(Math.round(eased * end))
+
+      if (progress < 1) {
+        animationFrame = requestAnimationFrame(animate)
+      }
+    }
+
+    animationFrame = requestAnimationFrame(animate)
+    return () => cancelAnimationFrame(animationFrame)
+  }, [end, duration])
+
+  return count
+}
+
+// Animated score circle with SVG ring
+function ScoreCircle({ score }: { score: number }) {
+  const animatedScore = useCountUp(score, 1200)
+  const circumference = 2 * Math.PI * 45 // radius = 45
+  const strokeDashoffset = circumference - (animatedScore / 100) * circumference
+
+  const getScoreColor = (s: number) => {
+    if (s >= 80) return { bg: 'from-green-100 to-green-50 dark:from-green-900/40 dark:to-green-900/20', text: 'text-green-600 dark:text-green-400', stroke: '#22c55e' }
+    if (s >= 60) return { bg: 'from-yellow-100 to-yellow-50 dark:from-yellow-900/40 dark:to-yellow-900/20', text: 'text-yellow-600 dark:text-yellow-400', stroke: '#eab308' }
+    return { bg: 'from-red-100 to-red-50 dark:from-red-900/40 dark:to-red-900/20', text: 'text-red-600 dark:text-red-400', stroke: '#ef4444' }
+  }
+
+  const colors = getScoreColor(score)
+
+  return (
+    <div className={`relative w-32 h-32 rounded-full bg-gradient-to-br ${colors.bg} shadow-lg`}>
+      {/* SVG ring */}
+      <svg className="absolute inset-0 w-full h-full -rotate-90" viewBox="0 0 100 100">
+        {/* Background circle */}
+        <circle
+          cx="50"
+          cy="50"
+          r="45"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="6"
+          className="text-gray-200 dark:text-gray-700"
+        />
+        {/* Progress circle */}
+        <circle
+          cx="50"
+          cy="50"
+          r="45"
+          fill="none"
+          stroke={colors.stroke}
+          strokeWidth="6"
+          strokeLinecap="round"
+          strokeDasharray={circumference}
+          strokeDashoffset={strokeDashoffset}
+          style={{ transition: 'stroke-dashoffset 1.2s ease-out' }}
+        />
+      </svg>
+      {/* Score text */}
+      <div className="absolute inset-0 flex items-center justify-center">
+        <span className={`text-4xl font-bold ${colors.text}`}>
+          {animatedScore}
+        </span>
+      </div>
+    </div>
+  )
+}
 
 interface AnalysisSummaryProps {
   analysis: AnalysisResult
@@ -69,25 +149,25 @@ export function AnalysisSummary({ analysis, onNewSession, onExit }: AnalysisSumm
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="border-b border-gray-200 dark:border-gray-800">
+    <div className="min-h-screen">
+      <header className="border-b border-white/20 backdrop-blur-sm sticky top-0 z-10">
         <div className="max-w-3xl mx-auto px-4 py-4">
-          <h1 className="text-2xl font-bold text-center">Session Analysis</h1>
+          <h1 className="text-2xl font-bold text-center text-white">Session Analysis</h1>
         </div>
       </header>
 
       <main className="max-w-3xl mx-auto px-4 py-8 space-y-8 relative">
         {/* Result banner */}
         <div
-          className={`text-center p-6 rounded-xl ${
+          className={`text-center p-8 rounded-2xl shadow-lg opacity-0 animate-fade-in-up ${
             reachedTarget
-              ? 'bg-green-100 dark:bg-green-900/30'
+              ? 'bg-gradient-to-br from-green-100 to-green-50 dark:from-green-900/40 dark:to-green-900/20 border border-green-200 dark:border-green-800'
               : profit >= 0
-                ? 'bg-yellow-100 dark:bg-yellow-900/30'
-                : 'bg-red-100 dark:bg-red-900/30'
+                ? 'bg-gradient-to-br from-yellow-100 to-yellow-50 dark:from-yellow-900/40 dark:to-yellow-900/20 border border-yellow-200 dark:border-yellow-800'
+                : 'bg-gradient-to-br from-red-100 to-red-50 dark:from-red-900/40 dark:to-red-900/20 border border-red-200 dark:border-red-800'
           }`}
         >
-          <div className="text-4xl mb-2">
+          <div className="text-5xl mb-4 animate-bounce">
             {reachedTarget ? '\u{1F3C6}' : profit >= 0 ? '\u{1F4B0}' : '\u{1F4C9}'}
           </div>
           <h2 className="text-2xl font-bold">
@@ -98,37 +178,31 @@ export function AnalysisSummary({ analysis, onNewSession, onExit }: AnalysisSumm
                 : 'Learning Opportunity'}
           </h2>
           <p className="text-lg mt-2">
-            <span className={profit >= 0 ? 'text-green-600' : 'text-red-600'}>
+            <span className={`font-semibold ${profit >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
               {profit >= 0 ? '+' : ''}${profit}
             </span>
-            <span className="text-gray-500"> in {handsPlayed} hands</span>
+            <span className="text-gray-500 dark:text-gray-400"> in {handsPlayed} hands</span>
           </p>
         </div>
 
         {/* Last Hand Summary */}
-        {lastHand && <LastHandSummary hand={lastHand} decisions={analysis.decisions} />}
+        {lastHand && (
+          <div className="opacity-0 animate-fade-in-up animation-delay-100">
+            <LastHandSummary hand={lastHand} decisions={analysis.decisions} />
+          </div>
+        )}
 
         {/* Overall score */}
-        <div className="text-center">
+        <div className="text-center opacity-0 animate-fade-in-up animation-delay-200">
           <div className="inline-flex flex-col items-center">
-            <div
-              className={`w-32 h-32 rounded-full flex items-center justify-center text-4xl font-bold ${
-                overallScore >= 80
-                  ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
-                  : overallScore >= 60
-                    ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400'
-                    : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
-              }`}
-            >
-              {overallScore}
-            </div>
-            <span className="mt-2 text-gray-500">Decision Score</span>
+            <ScoreCircle score={overallScore} />
+            <span className="mt-4 text-gray-500 dark:text-gray-400 font-medium">Decision Score</span>
           </div>
         </div>
 
         {/* Score breakdown */}
-        <div className="bg-gray-100 dark:bg-gray-800 rounded-xl p-6">
-          <h3 className="font-semibold mb-4">Score Breakdown</h3>
+        <div className="bg-gray-100 dark:bg-gray-800/50 rounded-2xl p-6 shadow-sm border border-gray-200 dark:border-gray-700 opacity-0 animate-fade-in-up animation-delay-300 card-hover">
+          <h3 className="font-semibold mb-4 text-lg">Score Breakdown</h3>
           <div className="space-y-4">
             <ScoreBar
               label="Preflop Decisions"
@@ -164,11 +238,13 @@ export function AnalysisSummary({ analysis, onNewSession, onExit }: AnalysisSumm
         </div>
 
         {/* Player Profile */}
-        <PlayerProfile vpip={playStyle.vpip} pfr={playStyle.pfr} aggression={playStyle.aggression} />
+        <div className="opacity-0 animate-fade-in-up animation-delay-400">
+          <PlayerProfile vpip={playStyle.vpip} pfr={playStyle.pfr} aggression={playStyle.aggression} />
+        </div>
 
         {/* Play style */}
-        <div className="bg-gray-100 dark:bg-gray-800 rounded-xl p-6">
-          <h3 className="font-semibold mb-4">Your Play Style</h3>
+        <div className="bg-gray-100 dark:bg-gray-800/50 rounded-2xl p-6 shadow-sm border border-gray-200 dark:border-gray-700 opacity-0 animate-fade-in-up animation-delay-500 card-hover">
+          <h3 className="font-semibold mb-4 text-lg">Your Play Style</h3>
 
           {/* Style spectrum bars */}
           <div className="space-y-4 mb-6">
@@ -250,13 +326,15 @@ export function AnalysisSummary({ analysis, onNewSession, onExit }: AnalysisSumm
 
         {/* Strengths */}
         {strengths.length > 0 && (
-          <div className="bg-green-50 dark:bg-green-900/20 rounded-xl p-6">
-            <h3 className="font-semibold mb-3 flex items-center gap-2">
-              <span className="text-green-500">{'\u2713'}</span> Strengths
+          <div className="bg-gradient-to-br from-green-50 to-green-100/50 dark:from-green-900/30 dark:to-green-900/10 rounded-2xl p-6 border border-green-200 dark:border-green-800 shadow-sm opacity-0 animate-fade-in-up animation-delay-600 card-hover">
+            <h3 className="font-semibold mb-4 flex items-center gap-2 text-lg">
+              <span className="w-6 h-6 rounded-full bg-green-500 text-white flex items-center justify-center text-sm">{'\u2713'}</span>
+              Strengths
             </h3>
             <ul className="space-y-2">
               {strengths.map((s, i) => (
-                <li key={i} className="text-green-800 dark:text-green-300">
+                <li key={i} className="text-green-800 dark:text-green-300 flex items-start gap-2">
+                  <span className="text-green-400 mt-1">{'\u2022'}</span>
                   {s}
                 </li>
               ))}
@@ -266,13 +344,15 @@ export function AnalysisSummary({ analysis, onNewSession, onExit }: AnalysisSumm
 
         {/* Weaknesses */}
         {weaknesses.length > 0 && (
-          <div className="bg-red-50 dark:bg-red-900/20 rounded-xl p-6">
-            <h3 className="font-semibold mb-3 flex items-center gap-2">
-              <span className="text-red-500">{'\u26A0'}</span> Areas to Improve
+          <div className="bg-gradient-to-br from-red-50 to-red-100/50 dark:from-red-900/30 dark:to-red-900/10 rounded-2xl p-6 border border-red-200 dark:border-red-800 shadow-sm opacity-0 animate-fade-in-up animation-delay-600 card-hover">
+            <h3 className="font-semibold mb-4 flex items-center gap-2 text-lg">
+              <span className="w-6 h-6 rounded-full bg-red-500 text-white flex items-center justify-center text-sm">{'\u26A0'}</span>
+              Areas to Improve
             </h3>
             <ul className="space-y-2">
               {weaknesses.map((w, i) => (
-                <li key={i} className="text-red-800 dark:text-red-300">
+                <li key={i} className="text-red-800 dark:text-red-300 flex items-start gap-2">
+                  <span className="text-red-400 mt-1">{'\u2022'}</span>
                   {w}
                 </li>
               ))}
@@ -282,13 +362,15 @@ export function AnalysisSummary({ analysis, onNewSession, onExit }: AnalysisSumm
 
         {/* Recommendations */}
         {recommendations.length > 0 && (
-          <div className="bg-blue-50 dark:bg-blue-900/20 rounded-xl p-6">
-            <h3 className="font-semibold mb-3 flex items-center gap-2">
-              <span className="text-blue-500">{'\u{1F4A1}'}</span> Recommendations
+          <div className="bg-gradient-to-br from-blue-50 to-blue-100/50 dark:from-blue-900/30 dark:to-blue-900/10 rounded-2xl p-6 border border-blue-200 dark:border-blue-800 shadow-sm opacity-0 animate-fade-in-up animation-delay-700 card-hover">
+            <h3 className="font-semibold mb-4 flex items-center gap-2 text-lg">
+              <span className="w-6 h-6 rounded-full bg-blue-500 text-white flex items-center justify-center text-sm">{'\u{1F4A1}'}</span>
+              Recommendations
             </h3>
             <ul className="space-y-2">
               {recommendations.map((r, i) => (
-                <li key={i} className="text-blue-800 dark:text-blue-300">
+                <li key={i} className="text-blue-800 dark:text-blue-300 flex items-start gap-2">
+                  <span className="text-blue-400 mt-1">{'\u2022'}</span>
                   {r}
                 </li>
               ))}
@@ -297,17 +379,17 @@ export function AnalysisSummary({ analysis, onNewSession, onExit }: AnalysisSumm
         )}
 
         {/* Actions */}
-        <div className="flex gap-4">
+        <div className="flex gap-4 opacity-0 animate-fade-in-up animation-delay-700">
           <button
             onClick={onNewSession}
-            className="flex-1 py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg"
+            className="flex-1 py-4 btn-gradient-cyan text-gray-900 font-bold rounded-2xl transition-all duration-200 btn-press hover:scale-[1.02]"
           >
             Play Again
           </button>
           <button
             onClick={handleShare}
             disabled={isGenerating}
-            className="flex-1 py-3 bg-purple-600 hover:bg-purple-700 disabled:bg-purple-400 text-white font-semibold rounded-lg flex items-center justify-center gap-2"
+            className="flex-1 py-4 btn-gradient-purple disabled:opacity-50 disabled:shadow-none text-white font-bold rounded-2xl transition-all duration-200 flex items-center justify-center gap-2 btn-press hover:scale-[1.02]"
           >
             {isGenerating ? (
               <>
@@ -322,7 +404,7 @@ export function AnalysisSummary({ analysis, onNewSession, onExit }: AnalysisSumm
           </button>
           <button
             onClick={onExit}
-            className="flex-1 py-3 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 font-semibold rounded-lg"
+            className="flex-1 py-4 bg-gray-200 dark:bg-gray-800 hover:bg-gray-300 dark:hover:bg-gray-700 font-bold rounded-2xl shadow-sm hover:shadow-md transition-all duration-200 btn-press"
           >
             Back to Lessons
           </button>
@@ -337,11 +419,11 @@ export function AnalysisSummary({ analysis, onNewSession, onExit }: AnalysisSumm
       {/* Share Preview Modal */}
       {showShareModal && previewUrl && (
         <div
-          className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4"
+          className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4 animate-backdrop"
           onClick={handleCloseModal}
         >
           <div
-            className="bg-white dark:bg-gray-800 rounded-2xl p-6 max-w-md w-full shadow-2xl"
+            className="bg-white dark:bg-gray-800 rounded-2xl p-6 max-w-md w-full shadow-2xl animate-modal"
             onClick={(e) => e.stopPropagation()}
           >
             <h3 className="text-xl font-bold text-center mb-4">Share Your Results</h3>
@@ -356,16 +438,16 @@ export function AnalysisSummary({ analysis, onNewSession, onExit }: AnalysisSumm
             </div>
 
             {/* Actions */}
-            <div className="flex gap-3">
+            <div className="flex gap-4">
               <button
                 onClick={handleCloseModal}
-                className="flex-1 py-3 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 font-semibold rounded-xl"
+                className="flex-1 py-4 bg-gray-200 dark:bg-gray-800 hover:bg-gray-300 dark:hover:bg-gray-700 font-bold rounded-2xl transition-colors duration-200 btn-press"
               >
                 Cancel
               </button>
               <button
                 onClick={handleSaveImage}
-                className="flex-1 py-3 bg-purple-600 hover:bg-purple-700 text-white font-semibold rounded-xl flex items-center justify-center gap-2"
+                className="flex-1 py-4 btn-gradient-purple text-white font-bold rounded-2xl transition-all duration-200 flex items-center justify-center gap-2 btn-press hover:scale-[1.02]"
               >
                 {'\u2B07'} Save Image
               </button>
@@ -389,33 +471,39 @@ function ScoreBar({
   tooltip: string
 }) {
   const percentage = total > 0 ? Math.round((score / total) * 100) : 0
+  const [isVisible, setIsVisible] = useState(false)
+
+  useEffect(() => {
+    const timer = setTimeout(() => setIsVisible(true), 100)
+    return () => clearTimeout(timer)
+  }, [])
 
   return (
     <div className="group relative">
-      <div className="flex justify-between text-sm mb-1">
-        <span className="flex items-center gap-1 cursor-help">
+      <div className="flex justify-between text-sm mb-2">
+        <span className="flex items-center gap-2 cursor-help font-medium">
           {label}
-          <span className="text-gray-400 text-xs">{'\u24D8'}</span>
+          <span className="text-gray-400 dark:text-gray-500 text-xs opacity-60 group-hover:opacity-100 transition-opacity">{'\u24D8'}</span>
         </span>
-        <span>
-          {score}/{total} ({percentage}%)
+        <span className="text-gray-600 dark:text-gray-400">
+          {score}/{total} <span className="font-semibold">({percentage}%)</span>
         </span>
       </div>
-      <div className="h-2 bg-gray-300 dark:bg-gray-600 rounded-full overflow-hidden">
+      <div className="h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
         <div
-          className={`h-full ${
+          className={`h-full rounded-full transition-all duration-1000 ease-out ${
             percentage >= 80
-              ? 'bg-green-500'
+              ? 'bg-gradient-to-r from-green-500 to-green-400'
               : percentage >= 60
-                ? 'bg-yellow-500'
-                : 'bg-red-500'
+                ? 'bg-gradient-to-r from-yellow-500 to-yellow-400'
+                : 'bg-gradient-to-r from-red-500 to-red-400'
           }`}
-          style={{ width: `${percentage}%` }}
+          style={{ width: isVisible ? `${percentage}%` : '0%' }}
         />
       </div>
       {/* Tooltip */}
-      <div className="absolute left-0 right-0 bottom-full mb-2 hidden group-hover:block z-10">
-        <div className="bg-gray-900 text-white text-xs rounded-lg p-3 shadow-lg">
+      <div className="absolute left-0 right-0 bottom-full mb-2 hidden group-hover:block z-10 pointer-events-none">
+        <div className="bg-gray-900 text-white text-xs rounded-lg p-4 shadow-xl max-w-xs">
           {tooltip}
           <div className="absolute top-full left-4 border-4 border-transparent border-t-gray-900" />
         </div>
@@ -438,18 +526,18 @@ function StatBox({
   tooltip?: string
 }) {
   return (
-    <div className="bg-white dark:bg-gray-900 rounded-lg p-4 group relative">
-      <div className="text-2xl font-bold">{value}</div>
-      <div className="text-sm font-medium flex items-center gap-1">
+    <div className="bg-white dark:bg-gray-900 rounded-2xl p-4 group relative shadow-sm hover:shadow-md transition-shadow duration-200 border border-gray-100 dark:border-gray-800">
+      <div className="text-2xl font-bold text-gray-900 dark:text-white">{value}</div>
+      <div className="text-sm font-medium flex items-center gap-2 text-gray-700 dark:text-gray-300">
         {label}
-        {tooltip && <span className="text-gray-400 text-xs cursor-help">{'\u24D8'}</span>}
+        {tooltip && <span className="text-gray-400 text-xs cursor-help opacity-60 group-hover:opacity-100 transition-opacity">{'\u24D8'}</span>}
       </div>
-      <div className="text-xs text-gray-500 mt-1">{description}</div>
-      <div className="text-xs text-blue-500 mt-1">Ideal: {ideal}</div>
+      <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">{description}</div>
+      <div className="text-xs text-blue-600 dark:text-blue-400 mt-2 font-medium">Ideal: {ideal}</div>
       {/* Tooltip */}
       {tooltip && (
-        <div className="absolute left-0 right-0 bottom-full mb-2 hidden group-hover:block z-10">
-          <div className="bg-gray-900 text-white text-xs rounded-lg p-3 shadow-lg">
+        <div className="absolute left-0 right-0 bottom-full mb-2 hidden group-hover:block z-10 pointer-events-none">
+          <div className="bg-gray-900 text-white text-xs rounded-lg p-4 shadow-xl max-w-xs">
             {tooltip}
             <div className="absolute top-full left-4 border-4 border-transparent border-t-gray-900" />
           </div>
@@ -514,24 +602,24 @@ function PlayerProfile({
   }
 
   return (
-    <div className="bg-gray-100 dark:bg-gray-800 rounded-xl p-6">
-      <h3 className="font-semibold mb-4">Player Profile</h3>
+    <div className="bg-gray-100 dark:bg-gray-800/50 rounded-2xl p-6 shadow-sm border border-gray-200 dark:border-gray-700 card-hover">
+      <h3 className="font-semibold mb-4 text-lg">Player Profile</h3>
 
       <div className="flex items-center gap-4 mb-4">
         {/* Type badge */}
-        <div className={`${typeColor} text-white rounded-xl px-6 py-4 text-center min-w-[120px]`}>
+        <div className={`${typeColor} text-white rounded-2xl px-6 py-4 text-center min-w-[120px] shadow-lg`}>
           <div className="text-3xl font-bold">{typeAbbrev}</div>
           <div className="text-xs opacity-90 mt-1">{playerType}</div>
         </div>
 
         {/* Description */}
         <div className="flex-1">
-          <p className="text-sm text-gray-700 dark:text-gray-300">{typeDescription}</p>
+          <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">{typeDescription}</p>
         </div>
       </div>
 
       {/* Quadrant visualization */}
-      <div className="relative bg-white dark:bg-gray-900 rounded-lg p-4 mb-4">
+      <div className="relative bg-white dark:bg-gray-900 rounded-2xl p-4 mb-4 shadow-sm border border-gray-100 dark:border-gray-800">
         <div className="aspect-square max-w-[200px] mx-auto relative">
           {/* Grid */}
           <div className="absolute inset-0 grid grid-cols-2 grid-rows-2 gap-0.5">
@@ -549,32 +637,35 @@ function PlayerProfile({
             </div>
           </div>
 
-          {/* Position marker */}
+          {/* Position marker with animation */}
           <div
-            className="absolute w-4 h-4 bg-gray-900 dark:bg-white rounded-full border-2 border-white dark:border-gray-900 shadow-lg transform -translate-x-1/2 -translate-y-1/2 z-10"
+            className="absolute w-4 h-4 bg-gray-900 dark:bg-white rounded-full border-2 border-white dark:border-gray-900 shadow-lg transform -translate-x-1/2 -translate-y-1/2 z-10 transition-all duration-1000 ease-out"
             style={{
               // X: left = passive, right = aggressive (scale 0-4 aggression to 0-100%)
               left: `${Math.min(Math.max((aggression / 4) * 100, 5), 95)}%`,
               // Y: top = tight (low VPIP), bottom = loose (high VPIP)
               top: `${Math.min(Math.max((vpip / 70) * 100, 5), 95)}%`,
             }}
-          />
+          >
+            {/* Pulse ring */}
+            <div className="absolute inset-0 rounded-full bg-gray-900 dark:bg-white animate-ping opacity-20" />
+          </div>
 
           {/* Axis labels */}
-          <div className="absolute -left-8 top-1/2 -translate-y-1/2 -rotate-90 text-xs text-gray-500 whitespace-nowrap">
+          <div className="absolute -left-8 top-1/2 -translate-y-1/2 -rotate-90 text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap font-medium">
             VPIP {'\u2192'}
           </div>
-          <div className="absolute bottom-[-20px] left-1/2 -translate-x-1/2 text-xs text-gray-500">
+          <div className="absolute -bottom-6 left-1/2 -translate-x-1/2 text-xs text-gray-500 dark:text-gray-400 font-medium">
             Aggression {'\u2192'}
           </div>
         </div>
       </div>
 
       {/* Advice */}
-      <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-3">
-        <div className="flex items-start gap-2">
-          <span className="text-blue-500">{'\u{1F4A1}'}</span>
-          <p className="text-sm text-blue-800 dark:text-blue-300">{typeAdvice}</p>
+      <div className="bg-gradient-to-r from-blue-50 to-blue-100/50 dark:from-blue-900/30 dark:to-blue-900/10 rounded-2xl p-4 border border-blue-100 dark:border-blue-800">
+        <div className="flex items-start gap-4">
+          <span className="text-blue-500 text-lg">{'\u{1F4A1}'}</span>
+          <p className="text-sm text-blue-800 dark:text-blue-300 leading-relaxed">{typeAdvice}</p>
         </div>
       </div>
     </div>
@@ -616,25 +707,27 @@ function StyleSpectrum({
 
   return (
     <div className="group relative">
-      <div className="flex justify-between items-center mb-1">
-        <span className="text-sm font-medium flex items-center gap-1">
+      <div className="flex justify-between items-center mb-2">
+        <span className="text-sm font-medium flex items-center gap-2">
           {label}
-          <span className="text-gray-400 text-xs cursor-help">{'\u24D8'}</span>
+          <span className="text-gray-400 dark:text-gray-500 text-xs cursor-help opacity-60 group-hover:opacity-100 transition-opacity">{'\u24D8'}</span>
         </span>
         <span
-          className={`text-xs font-medium ${
-            isInIdealRange ? 'text-green-600 dark:text-green-400' : 'text-yellow-600 dark:text-yellow-400'
+          className={`text-xs font-semibold px-2 py-1 rounded-full ${
+            isInIdealRange
+              ? 'text-green-700 dark:text-green-300 bg-green-100 dark:bg-green-900/40'
+              : 'text-yellow-700 dark:text-yellow-300 bg-yellow-100 dark:bg-yellow-900/40'
           }`}
         >
-          {isInIdealRange ? 'In range' : 'Out of range'}
+          {isInIdealRange ? '\u2713 In range' : 'Out of range'}
         </span>
       </div>
 
       {/* Spectrum bar */}
-      <div className="relative h-6 rounded-full overflow-hidden bg-gradient-to-r from-blue-400 via-green-400 to-red-400">
+      <div className="relative h-8 rounded-full overflow-hidden bg-gradient-to-r from-blue-400 via-green-400 to-red-400 shadow-inner">
         {/* Ideal zone highlight */}
         <div
-          className="absolute top-0 bottom-0 bg-white/30 border-x-2 border-white/50"
+          className="absolute top-0 bottom-0 bg-white/40 border-x-2 border-white/60"
           style={{
             left: `${idealStart}%`,
             width: `${idealEnd - idealStart}%`,
@@ -643,24 +736,24 @@ function StyleSpectrum({
 
         {/* Position marker */}
         <div
-          className="absolute top-0 bottom-0 w-1 bg-gray-900 dark:bg-white shadow-lg transition-all duration-300"
+          className="absolute top-0 bottom-0 w-1 bg-gray-900 dark:bg-white shadow-lg transition-all duration-700 ease-out"
           style={{ left: `calc(${position}% - 2px)` }}
         >
           {/* Marker arrow */}
-          <div className="absolute -top-2 left-1/2 -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-b-4 border-transparent border-b-gray-900 dark:border-b-white" />
+          <div className="absolute -top-2 left-1/2 -translate-x-1/2 w-0 h-0 border-l-[4px] border-r-[4px] border-b-[8px] border-transparent border-b-gray-900 dark:border-b-white" />
         </div>
       </div>
 
       {/* Labels */}
-      <div className="flex justify-between mt-1">
-        <span className="text-xs text-gray-500">{leftLabel}</span>
-        <span className="text-xs text-gray-500">{centerLabel}</span>
-        <span className="text-xs text-gray-500">{rightLabel}</span>
+      <div className="flex justify-between mt-2">
+        <span className="text-xs text-gray-500 dark:text-gray-400 font-medium">{leftLabel}</span>
+        <span className="text-xs text-gray-500 dark:text-gray-400 font-medium">{centerLabel}</span>
+        <span className="text-xs text-gray-500 dark:text-gray-400 font-medium">{rightLabel}</span>
       </div>
 
       {/* Tooltip */}
-      <div className="absolute left-0 right-0 bottom-full mb-2 hidden group-hover:block z-10">
-        <div className="bg-gray-900 text-white text-xs rounded-lg p-3 shadow-lg">
+      <div className="absolute left-0 right-0 bottom-full mb-2 hidden group-hover:block z-10 pointer-events-none">
+        <div className="bg-gray-900 text-white text-xs rounded-lg p-4 shadow-xl max-w-xs">
           {tooltip}
           <div className="absolute top-full left-4 border-4 border-transparent border-t-gray-900" />
         </div>
@@ -752,8 +845,8 @@ function LastHandSummary({
   }
 
   return (
-    <div className="bg-gray-100 dark:bg-gray-800 rounded-xl overflow-hidden">
-      <div className="bg-gray-200 dark:bg-gray-700 px-6 py-3">
+    <div className="bg-gray-100 dark:bg-gray-800/50 rounded-2xl overflow-hidden shadow-sm border border-gray-200 dark:border-gray-700 card-hover">
+      <div className="bg-gradient-to-r from-gray-200 to-gray-100 dark:from-gray-700 dark:to-gray-800 px-6 py-4">
         <h3 className="font-semibold text-lg">Final Hand #{hand.handNumber}</h3>
       </div>
 
@@ -762,43 +855,40 @@ function LastHandSummary({
         <div className="flex items-center justify-between">
           <div>
             <span className={`text-2xl font-bold ${resultColor}`}>{resultAmount}</span>
-            <span className="ml-2 text-gray-500">{resultLabel}</span>
+            <span className="ml-2 text-gray-500 dark:text-gray-400">{resultLabel}</span>
           </div>
-          <span className="text-sm text-gray-500">
+          <span className="text-sm text-gray-500 dark:text-gray-400 bg-gray-200 dark:bg-gray-700 px-4 py-1 rounded-full">
             {hand.heroPosition === 'BTN' ? 'You were Button' : 'You were Big Blind'}
           </span>
         </div>
 
         {/* Cards display */}
-        <div className="bg-green-800 dark:bg-green-900 rounded-xl p-4">
-          {/* Board */}
-          <div className="flex justify-center mb-4">
-            <Board cards={boardToShow} />
-          </div>
+        <div className="flex justify-center mb-6">
+          <Board cards={boardToShow} />
+        </div>
 
-          {/* Hands */}
-          <div className="flex justify-center gap-8">
-            <div className="text-center">
-              <Hand cards={hand.villainCards} label="Villain" />
-              {!heroFolded && !villainFolded && (
-                <p className="text-white text-sm mt-2">{villainResult.description}</p>
-              )}
-            </div>
-            <div className="text-center">
-              <Hand cards={hand.heroCards} label="You" highlight />
-              {!heroFolded && !villainFolded && (
-                <p className="text-white text-sm mt-2">{heroResult.description}</p>
-              )}
-            </div>
+        {/* Hands */}
+        <div className="flex justify-center gap-8">
+          <div className="text-center">
+            <Hand cards={hand.villainCards} label="Villain" />
+            {!heroFolded && !villainFolded && (
+              <p className="text-sm mt-4 font-medium">{villainResult.description}</p>
+            )}
+          </div>
+          <div className="text-center">
+            <Hand cards={hand.heroCards} label="You" highlight />
+            {!heroFolded && !villainFolded && (
+              <p className="text-sm mt-4 font-medium">{heroResult.description}</p>
+            )}
           </div>
         </div>
 
         {/* Action History */}
         <div>
-          <h4 className="font-semibold text-sm mb-3 text-gray-700 dark:text-gray-300">
+          <h4 className="font-semibold text-sm mb-4 text-gray-700 dark:text-gray-300">
             Hand History
           </h4>
-          <div className="space-y-3 bg-white dark:bg-gray-900 rounded-lg p-4 max-h-64 overflow-y-auto">
+          <div className="space-y-4 bg-white dark:bg-gray-900 rounded-2xl p-4 max-h-64 overflow-y-auto border border-gray-100 dark:border-gray-800 shadow-sm">
             {streets.map((street) => {
               const streetActions = groupedActions[street]
               if (!streetActions || streetActions.length === 0) return null
@@ -834,17 +924,17 @@ function LastHandSummary({
         {/* Decision Analysis */}
         {handDecisions.length > 0 && (
           <div>
-            <h4 className="font-semibold text-sm mb-3 text-gray-700 dark:text-gray-300">
+            <h4 className="font-semibold text-sm mb-4 text-gray-700 dark:text-gray-300">
               Your Decisions
             </h4>
             <div className="space-y-2">
               {handDecisions.map((decision, idx) => (
                 <div
                   key={idx}
-                  className={`p-3 rounded-lg ${
+                  className={`p-4 rounded-2xl transition-all duration-200 ${
                     decision.wasOptimal
-                      ? 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800'
-                      : 'bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800'
+                      ? 'bg-gradient-to-r from-green-50 to-green-100/50 dark:from-green-900/30 dark:to-green-900/10 border border-green-200 dark:border-green-800'
+                      : 'bg-gradient-to-r from-red-50 to-red-100/50 dark:from-red-900/30 dark:to-red-900/10 border border-red-200 dark:border-red-800'
                   }`}
                 >
                   <div className="flex items-center justify-between">
@@ -852,13 +942,16 @@ function LastHandSummary({
                       {decision.street}: {decision.action}
                       {decision.betAmount ? ` $${decision.betAmount}` : ''}
                     </span>
-                    <span className={decision.wasOptimal ? 'text-green-600' : 'text-red-600'}>
-                      {decision.wasOptimal ? '\u2713 Optimal' : '\u2717 Suboptimal'}
+                    <span className={`flex items-center gap-2 font-medium ${decision.wasOptimal ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                      <span className={`w-4 h-4 rounded-full flex items-center justify-center text-xs text-white ${decision.wasOptimal ? 'bg-green-500' : 'bg-red-500'}`}>
+                        {decision.wasOptimal ? '\u2713' : '\u2717'}
+                      </span>
+                      {decision.wasOptimal ? 'Optimal' : 'Suboptimal'}
                     </span>
                   </div>
                   {!decision.wasOptimal && (
-                    <p className="text-sm mt-1 text-gray-600 dark:text-gray-400">
-                      Better: {decision.optimalAction} \u2014 {decision.reasoning}
+                    <p className="text-sm mt-2 text-gray-600 dark:text-gray-400 leading-relaxed">
+                      <span className="font-medium text-gray-700 dark:text-gray-300">Better:</span> {decision.optimalAction} \u2014 {decision.reasoning}
                     </p>
                   )}
                 </div>

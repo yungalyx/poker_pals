@@ -107,7 +107,7 @@ export function PracticeHand({ hand, onComplete }: PracticeHandProps) {
       </div>
 
       {/* Table */}
-      <div className="bg-green-800 dark:bg-green-900 rounded-xl p-6 mb-6">
+      <div className="rounded-xl p-6 mb-6">
         {/* Street indicator */}
         <div className="text-center mb-4">
           <span className="bg-black/30 text-white px-3 py-1 rounded-full text-sm">

@@ -28,16 +28,16 @@ export function AnimatedHand({
   }, [animationKey])
 
   return (
-    <div className="flex flex-col items-center gap-1">
+    <div className="flex flex-col items-center gap-2">
       {label && (
-        <span className="text-xs text-gray-500 dark:text-gray-400 font-medium">
+        <span className="text-xs font-semibold uppercase tracking-wide opacity-70">
           {label}
         </span>
       )}
       <div
         className={`
-          flex gap-1
-          ${highlight ? 'ring-2 ring-blue-500 ring-offset-2 rounded-lg p-1' : ''}
+          flex gap-2 p-2 rounded-2xl
+          ${highlight ? 'bg-white/10 ring-2 ring-white/30' : ''}
         `}
       >
         <AnimatedCard

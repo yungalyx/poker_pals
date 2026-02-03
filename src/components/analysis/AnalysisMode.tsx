@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import type { Action } from '@/types'
 import type { AnalysisGameState, AnalysisResult, ActionEntry } from '@/types/analysis'
-import { Hand, Board, AnimatedHand, AnimatedBoard } from '@/components/poker'
+import { AnimatedHand, AnimatedBoard } from '@/components/poker'
 import { evaluateHand } from '@/lib/poker'
 import {
   createAnalysisSession,
@@ -13,6 +13,7 @@ import {
   getOptimalAction,
 } from '@/lib/analysis'
 import { AnalysisSummary } from './AnalysisSummary'
+import { HandResultModal, ResultType } from './HandResultModal'
 
 interface AnalysisModeProps {
   onExit: () => void
@@ -36,10 +37,11 @@ export function AnalysisMode({ onExit }: AnalysisModeProps) {
     message: string
     buttonType: 'fold' | 'check-call' | 'raise-0' | 'raise-1' | 'raise-2'
   } | null>(null)
+  const [dealCount, setDealCount] = useState(0)
 
   const hand = gameState.currentHand
   const profit = gameState.currentStack - gameState.startingStack
-  const animationKey = gameState.handsPlayed
+  const animationKey = dealCount
 
   // Reset timer when hand changes or mode changes
   const resetTimer = useCallback(() => {
@@ -175,13 +177,15 @@ export function AnalysisMode({ onExit }: AnalysisModeProps) {
   }
 
   const handleNextHand = () => {
-    setGameState(dealNewHand(gameState))
+    setGameState(prevState => dealNewHand(prevState))
+    setDealCount(prev => prev + 1)
     setShowVillainCards(false)
     setLastFeedback(null)
   }
 
   const handleNewSession = () => {
     setGameState(dealNewHand(createAnalysisSession(100, 1000, 20)))
+    setDealCount(prev => prev + 1)
     setAnalysis(null)
     setShowVillainCards(false)
     setLastFeedback(null)
@@ -192,12 +196,32 @@ export function AnalysisMode({ onExit }: AnalysisModeProps) {
     return <AnalysisSummary analysis={analysis} onNewSession={handleNewSession} onExit={onExit} />
   }
 
-  // Show hand result
-  if (gameState.mode === 'hand-complete' && gameState.handHistory.length > 0) {
-    const lastHand = gameState.handHistory[gameState.handHistory.length - 1]
+  // Compute result data for modal (check before null hand check)
+  const isHandComplete = gameState.mode === 'hand-complete' && gameState.handHistory.length > 0
+  const lastHand = isHandComplete ? gameState.handHistory[gameState.handHistory.length - 1] : null
+
+  // No hand dealt yet and not showing results - show deal button
+  if (!hand && !isHandComplete) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <button onClick={handleNextHand} className="px-8 py-4 bg-blue-500 hover:bg-blue-400 text-white text-lg font-bold rounded-xl border-b-4 border-blue-700 active:border-b-0 active:mt-1 active:mb-[-4px] transition-all shadow-lg">
+          Deal First Hand
+        </button>
+      </div>
+    )
+  }
+
+  let modalResult: ResultType = 'loss'
+  let modalAmount = 0
+  let heroHandDescription = ''
+  let villainHandDescription = ''
+
+  if (lastHand) {
     const boardToShow = lastHand.fullBoard || lastHand.board
     const heroResult = evaluateHand(lastHand.heroCards, boardToShow)
     const villainResult = evaluateHand(lastHand.villainCards, boardToShow)
+    heroHandDescription = heroResult.description
+    villainHandDescription = villainResult.description
 
     // Determine result type
     const heroFolded = lastHand.actionHistory?.some(
@@ -213,267 +237,212 @@ export function AnalysisMode({ onExit }: AnalysisModeProps) {
     const isDisciplinedFold = heroFolded && lastDecisionCorrect
     const isBadBeat = lastHand.winner === 'villain' && !heroFolded && allDecisionsOptimal
 
-    // Determine display properties
-    let resultBgColor = ''
-    let resultTextColor = ''
-    let resultAmount = ''
-    let resultLabel = ''
-
     if (lastHand.winner === 'hero') {
-      resultBgColor = 'bg-green-100 dark:bg-green-900/30'
-      resultTextColor = 'text-green-600 dark:text-green-400'
-      resultAmount = `+$${lastHand.pot}`
-      resultLabel = 'You Win!'
+      modalResult = 'win'
+      modalAmount = lastHand.pot
     } else if (lastHand.winner === 'tie') {
-      resultBgColor = 'bg-yellow-100 dark:bg-yellow-900/30'
-      resultTextColor = 'text-yellow-600 dark:text-yellow-400'
-      resultAmount = `+$${Math.floor(lastHand.pot / 2)}`
-      resultLabel = 'Split Pot'
+      modalResult = 'split'
+      modalAmount = Math.floor(lastHand.pot / 2)
     } else if (isDisciplinedFold) {
-      resultBgColor = 'bg-blue-100 dark:bg-blue-900/30'
-      resultTextColor = 'text-blue-600 dark:text-blue-400'
-      resultAmount = 'Saved'
-      resultLabel = 'Disciplined Fold'
+      modalResult = 'disciplined-fold'
+      modalAmount = 0
     } else if (isBadBeat) {
-      resultBgColor = 'bg-purple-100 dark:bg-purple-900/30'
-      resultTextColor = 'text-purple-600 dark:text-purple-400'
-      resultAmount = `-$${lastHand.pot}`
-      resultLabel = 'Bad Beat'
+      modalResult = 'bad-beat'
+      modalAmount = lastHand.pot
+    } else if (heroFolded) {
+      modalResult = 'fold'
+      modalAmount = lastHand.pot
     } else {
-      resultBgColor = 'bg-red-100 dark:bg-red-900/30'
-      resultTextColor = 'text-red-600 dark:text-red-400'
-      resultAmount = `-$${lastHand.pot}`
-      resultLabel = 'Villain Wins'
+      modalResult = 'loss'
+      modalAmount = lastHand.pot
     }
-
-    return (
-      <div className="min-h-screen bg-background">
-        <Header
-          handsPlayed={gameState.handsPlayed}
-          maxHands={gameState.maxHands}
-          stack={gameState.currentStack}
-          profit={profit}
-          targetProfit={gameState.targetProfit}
-          onExit={onExit}
-          onOpenSettings={() => setShowSettings(true)}
-        />
-
-        <main className="max-w-3xl mx-auto px-4 py-8">
-          {/* Prominent profit/loss display */}
-          <div className={`text-center py-6 px-4 rounded-xl mb-6 ${resultBgColor}`}>
-            <div className={`text-4xl font-bold mb-1 ${resultTextColor}`}>
-              {resultAmount}
-            </div>
-            <div className={`text-lg font-medium ${resultTextColor}`}>
-              {resultLabel}
-            </div>
-            {isDisciplinedFold && (
-              <p className="text-sm text-blue-600 dark:text-blue-300 mt-2">
-                You made the right call to fold. Well played!
-              </p>
-            )}
-            {isBadBeat && (
-              <p className="text-sm text-purple-600 dark:text-purple-300 mt-2">
-                You played it right, but variance happens. Keep it up!
-              </p>
-            )}
-          </div>
-
-          <div className="bg-green-800 dark:bg-green-900 rounded-xl p-6 mb-6">
-            <div className="flex justify-center mb-4">
-              <Board cards={boardToShow} />
-            </div>
-            <div className="flex justify-center gap-12">
-              <div className="text-center">
-                <Hand cards={lastHand.villainCards} label="Villain" />
-                <p className="text-white text-sm mt-2">{villainResult.description}</p>
-              </div>
-              <div className="text-center">
-                <Hand cards={lastHand.heroCards} label="You" highlight />
-                <p className="text-white text-sm mt-2">{heroResult.description}</p>
-              </div>
-            </div>
-          </div>
-
-          {/* Action Feed for completed hand */}
-          {lastHand.actionHistory && lastHand.actionHistory.length > 0 && (
-            <ActionFeed actions={lastHand.actionHistory} />
-          )}
-
-          <button
-            onClick={handleNextHand}
-            className="w-full py-4 bg-blue-500 hover:bg-blue-400 text-white text-lg font-bold rounded-xl border-b-4 border-blue-700 active:border-b-0 active:mt-1 active:mb-[-4px] transition-all shadow-lg mt-4"
-          >
-            Next Hand ({gameState.handsPlayed}/{gameState.maxHands})
-          </button>
-        </main>
-      </div>
-    )
   }
 
-  // Playing a hand
-  if (!hand) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <button onClick={handleNextHand} className="px-8 py-4 bg-blue-500 hover:bg-blue-400 text-white text-lg font-bold rounded-xl border-b-4 border-blue-700 active:border-b-0 active:mt-1 active:mb-[-4px] transition-all shadow-lg">
-          Deal First Hand
-        </button>
-      </div>
-    )
-  }
+  // For display, use current hand when playing, or last hand when showing results
+  // When hand-complete, hand may be null, so we need lastHand for display
+  const displayBoard = isHandComplete && lastHand
+    ? (lastHand.fullBoard || lastHand.board)
+    : hand?.board || []
+  const displayPot = isHandComplete && lastHand ? lastHand.pot : hand?.pot || 0
+  const displayHeroCards = (isHandComplete && lastHand ? lastHand.heroCards : hand?.heroCards) as [string, string] | undefined
+  const displayVillainCards = (isHandComplete && lastHand ? lastHand.villainCards : hand?.villainCards) as [string, string] | undefined
+  const displayStreet = isHandComplete && lastHand ? lastHand.street : hand?.street || 'preflop'
+  const displayActionHistory = isHandComplete && lastHand?.actionHistory
+    ? lastHand.actionHistory
+    : hand?.actionHistory || []
 
-  const canCheck = hand.toCall === 0
-  const villainRaised = hand.lastAction?.includes('bets') || hand.lastAction?.includes('raises')
+  const canCheck = hand?.toCall === 0
+  const villainRaised = hand?.lastAction?.includes('bets') || hand?.lastAction?.includes('raises')
   const raiseLabel = canCheck ? 'Bet' : villainRaised ? 'Re-raise' : 'Raise'
-  const betSizes = [
+  const betSizes = hand ? [
     { label: '1/3 Pot', amount: Math.round(hand.pot * 0.33) },
     { label: '2/3 Pot', amount: Math.round(hand.pot * 0.66) },
     { label: 'Pot', amount: hand.pot },
-  ]
+  ] : []
+
+  // Show villain cards when hand is complete
+  const shouldShowVillainCards = showVillainCards || isHandComplete
 
   return (
     <div className="min-h-screen bg-background">
       <Header
         handsPlayed={gameState.handsPlayed}
         maxHands={gameState.maxHands}
-        stack={gameState.currentStack}
-        profit={profit}
-        targetProfit={gameState.targetProfit}
         onExit={onExit}
         onOpenSettings={() => setShowSettings(true)}
       />
 
-      <main className="max-w-5xl mx-auto px-4 py-8">
-        {/* Street indicator */}
-        <div className="text-center mb-4">
-          <span className="bg-gray-200 dark:bg-gray-700 px-3 py-1 rounded-full text-sm font-medium capitalize">
-            {hand.street}
-          </span>
-          <span className="ml-2 text-sm text-gray-500">
-            {hand.heroPosition === 'BTN' ? 'You are Button' : 'You are Big Blind'}
+      {/* Stack display - fixed bottom right */}
+      <div className="fixed bottom-48 right-48 text-right z-10">
+        <div className="flex items-baseline gap-3">
+          <span className="text-4xl font-bold text-white">${gameState.currentStack}</span>
+          <span className={`text-xl font-bold ${profit >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+            {profit >= 0 ? '+' : ''}{profit}
           </span>
         </div>
+        <span className="block text-sm text-white/60">your stack</span>
+      </div>
 
-        {/* Two column layout: Board + Actions | Action History */}
-        <div className="flex gap-6">
-          {/* Left column: Board and Actions */}
-          <div className="flex-1">
-            {/* Table */}
-            <div className="bg-green-800 dark:bg-green-900 rounded-xl p-6 mb-6">
-              {/* Villain */}
-              <div className="flex justify-center mb-4">
-                {showVillainCards ? (
-                  <AnimatedHand cards={hand.villainCards} label="Villain" animationKey={animationKey} />
-                ) : (
-                  <div className="text-center">
-                    <div className="flex gap-1">
-                      <div className="w-12 h-16 bg-blue-800 rounded-md border-2 border-blue-600" />
-                      <div className="w-12 h-16 bg-blue-800 rounded-md border-2 border-blue-600" />
-                    </div>
-                    <span className="text-xs text-white/70 mt-1 block">Villain</span>
-                  </div>
-                )}
+      <main className="relative max-w-lg mx-auto px-4 py-6">
+        {/* Pot indicator - positioned to the left */}
+        <div className="absolute right-full mr-6 top-44 text-center hidden xl:block">
+          <span className="text-5xl font-bold text-white">${displayPot}</span>
+          <span className="block text-sm text-white/60">in pot</span>
+        </div>
+
+        {/* Action History - positioned to the right */}
+        {displayActionHistory.length > 0 && (
+          <div className="absolute left-full ml-6 top-44 w-56 hidden xl:block">
+            <ActionFeed actions={displayActionHistory} />
+          </div>
+        )}
+
+        {/* Table - ALWAYS rendered */}
+        <div className="rounded-xl p-6 mb-6">
+          {/* Villain */}
+          <div className="flex justify-center mb-4">
+            {shouldShowVillainCards && displayVillainCards ? (
+              <AnimatedHand
+                cards={displayVillainCards}
+                label="Villain"
+                animationKey={animationKey}
+              />
+            ) : (
+              <div className="text-center">
+                <div className="flex gap-1">
+                  <div className="w-12 h-16 bg-blue-800 rounded-md border-2 border-blue-600" />
+                  <div className="w-12 h-16 bg-blue-800 rounded-md border-2 border-blue-600" />
+                </div>
+                <span className="text-xs text-white/70 mt-1 block">Villain</span>
               </div>
-
-              {/* Board */}
-              <div className="flex justify-center mb-4">
-                <AnimatedBoard cards={hand.board} animationKey={animationKey} />
-              </div>
-
-              {/* Pot */}
-              <div className="text-center mb-4">
-                <span className="inline-block bg-gradient-to-b from-yellow-400 to-yellow-600 text-white px-6 py-3 rounded-full font-bold text-lg shadow-lg border-b-4 border-yellow-700">
-                  Pot: ${hand.pot}
-                </span>
-              </div>
-
-              {/* Hero */}
-              <div className="flex justify-center">
-                <AnimatedHand
-                  cards={hand.heroCards}
-                  label="You"
-                  highlight
-                  size="lg"
-                  animationKey={animationKey}
-                  startDelay={hand.street === 'preflop' ? 0 : undefined}
-                />
-              </div>
-            </div>
-
-            {/* Villain action */}
-            {hand.lastAction && (
-              <p className="text-center text-lg mb-4 font-medium">{hand.lastAction}</p>
             )}
+          </div>
 
-            {/* Action buttons */}
-            <div className="space-y-4">
-              {/* Fold / Check / Call row */}
-              <div className="flex gap-3">
-                {/* Fold button */}
-                <div className="flex-1 relative">
-                  <FeedbackCallout
-                    show={buddyMode && lastFeedback?.buttonType === 'fold'}
-                    feedback={lastFeedback}
-                  />
-                  <button
-                    onClick={() => handleAction('fold')}
-                    className="w-full py-4 bg-red-500 hover:bg-red-400 text-white text-lg font-bold rounded-xl border-b-4 border-red-700 active:border-b-0 active:mt-1 active:mb-[-4px] transition-all shadow-lg"
-                  >
-                    Fold
-                  </button>
-                </div>
+          {/* Board */}
+          <div className="flex justify-center mb-4">
+            <AnimatedBoard cards={displayBoard} animationKey={animationKey} />
+          </div>
 
-                {/* Check/Call button */}
-                <div className="flex-1 relative">
-                  <FeedbackCallout
-                    show={buddyMode && lastFeedback?.buttonType === 'check-call'}
-                    feedback={lastFeedback}
-                  />
-                  <button
-                    onClick={() => handleAction(canCheck ? 'check' : 'call')}
-                    className="w-full py-4 bg-green-500 hover:bg-green-400 text-white text-lg font-bold rounded-xl border-b-4 border-green-700 active:border-b-0 active:mt-1 active:mb-[-4px] transition-all shadow-lg"
-                  >
-                    {canCheck ? 'Check' : `Call $${hand.toCall}`}
-                  </button>
-                </div>
+          {/* Hero */}
+          <div className="flex justify-center">
+            {displayHeroCards && (
+              <AnimatedHand
+                cards={displayHeroCards}
+                label="You"
+                highlight
+                size="lg"
+                animationKey={animationKey}
+                startDelay={displayStreet === 'preflop' ? 0 : undefined}
+              />
+            )}
+          </div>
+        </div>
+
+        {/* Villain action - only show when playing */}
+        {gameState.mode === 'playing' && hand?.lastAction && (
+          <p className="text-center text-lg mb-4 font-medium">{hand.lastAction}</p>
+        )}
+
+        {/* Action buttons - only show when playing */}
+        {gameState.mode === 'playing' && (
+          <div className="space-y-4">
+            {/* Fold / Check / Call row */}
+            <div className="flex gap-3">
+              {/* Fold button */}
+              <div className="flex-1 relative">
+                <FeedbackCallout
+                  show={buddyMode && lastFeedback?.buttonType === 'fold'}
+                  feedback={lastFeedback}
+                />
+                <button
+                  onClick={() => handleAction('fold')}
+                  className="w-full py-4 bg-red-500 hover:bg-red-400 text-white text-lg font-bold rounded-xl border-b-4 border-red-700 active:border-b-0 active:mt-1 active:mb-[-4px] transition-all shadow-lg"
+                >
+                  Fold
+                </button>
               </div>
 
-              {/* Bet/Raise/Re-raise options */}
-              <div className="flex gap-3">
-                {betSizes.map((size, index) => (
-                  <div key={size.label} className="flex-1 relative">
-                    <FeedbackCallout
-                      show={buddyMode && lastFeedback?.buttonType === `raise-${index}`}
-                      feedback={lastFeedback}
-                    />
-                    <button
-                      onClick={() => handleAction(canCheck ? 'bet' : 'raise', size.amount, index)}
-                      className="w-full py-4 bg-blue-500 hover:bg-blue-400 text-white font-bold rounded-xl border-b-4 border-blue-700 active:border-b-0 active:mt-1 active:mb-[-4px] transition-all shadow-lg"
-                    >
-                      <span className="text-base">{raiseLabel} ${size.amount}</span>
-                      <span className="block text-xs opacity-80 mt-0.5">{size.label}</span>
-                    </button>
-                  </div>
-                ))}
+              {/* Check/Call button */}
+              <div className="flex-1 relative">
+                <FeedbackCallout
+                  show={buddyMode && lastFeedback?.buttonType === 'check-call'}
+                  feedback={lastFeedback}
+                />
+                <button
+                  onClick={() => handleAction(canCheck ? 'check' : 'call')}
+                  className="w-full py-4 bg-green-500 hover:bg-green-400 text-white text-lg font-bold rounded-xl border-b-4 border-green-700 active:border-b-0 active:mt-1 active:mb-[-4px] transition-all shadow-lg"
+                >
+                  {canCheck ? 'Check' : `Call $${hand?.toCall || 0}`}
+                </button>
               </div>
             </div>
-          </div>
 
-          {/* Right column: Action History */}
-          <div className="w-72 flex-shrink-0">
-            {hand.actionHistory.length > 0 && <ActionFeed actions={hand.actionHistory} />}
+            {/* Bet/Raise/Re-raise options */}
+            <div className="flex gap-3">
+              {betSizes.map((size, index) => (
+                <div key={size.label} className="flex-1 relative">
+                  <FeedbackCallout
+                    show={buddyMode && lastFeedback?.buttonType === `raise-${index}`}
+                    feedback={lastFeedback}
+                  />
+                  <button
+                    onClick={() => handleAction(canCheck ? 'bet' : 'raise', size.amount, index)}
+                    className="w-full py-4 bg-blue-500 hover:bg-blue-400 text-white font-bold rounded-xl border-b-4 border-blue-700 active:border-b-0 active:mt-1 active:mb-[-4px] transition-all shadow-lg"
+                  >
+                    <span className="text-base">{raiseLabel} ${size.amount}</span>
+                    <span className="block text-xs opacity-80 mt-0.5">{size.label}</span>
+                  </button>
+                </div>
+              ))}
+            </div>
           </div>
-        </div>
+        )}
 
-        {/* Debug toggle for villain cards */}
-        <div className="mt-4 flex justify-center">
-          <button
-            onClick={() => setShowVillainCards(!showVillainCards)}
-            className="text-xs text-gray-400 hover:text-gray-300"
-          >
-            {showVillainCards ? 'Hide' : 'Show'} villain cards
-          </button>
-        </div>
+        {/* Hand result - replaces action buttons when hand complete */}
+        {isHandComplete && (
+          <HandResultModal
+            isOpen={true}
+            result={modalResult}
+            amount={modalAmount}
+            heroHandDescription={heroHandDescription}
+            villainHandDescription={villainHandDescription}
+            handsPlayed={gameState.handsPlayed}
+            maxHands={gameState.maxHands}
+            onNextHand={handleNextHand}
+          />
+        )}
+
+        {/* Debug toggle for villain cards - only show when playing */}
+        {gameState.mode === 'playing' && (
+          <div className="mt-4 flex justify-center">
+            <button
+              onClick={() => setShowVillainCards(!showVillainCards)}
+              className="text-xs text-gray-400 hover:text-gray-300"
+            >
+              {showVillainCards ? 'Hide' : 'Show'} villain cards
+            </button>
+          </div>
+        )}
       </main>
 
       {/* Timer display - fixed on the side */}
@@ -588,25 +557,18 @@ export function AnalysisMode({ onExit }: AnalysisModeProps) {
 function Header({
   handsPlayed,
   maxHands,
-  stack,
-  profit,
-  targetProfit,
   onExit,
   onOpenSettings,
 }: {
   handsPlayed: number
   maxHands: number
-  stack: number
-  profit: number
-  targetProfit: number
   onExit: () => void
   onOpenSettings: () => void
 }) {
   return (
     <header className="sticky top-0 bg-background/80 backdrop-blur border-b border-gray-200 dark:border-gray-800 z-10">
-      <div className="max-w-5xl mx-auto px-4 py-3">
-        {/* Row 1: Exit, Title, Settings */}
-        <div className="flex items-center justify-between mb-3">
+      <div className="max-w-lg mx-auto px-4 py-3">
+        <div className="flex items-center justify-between">
           <button
             onClick={onExit}
             className="px-4 py-2 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 rounded-lg font-medium text-sm transition-colors"
@@ -614,7 +576,7 @@ function Header({
             {'\u2190'} Exit
           </button>
 
-          <span className="font-bold text-lg">Analysis Mode</span>
+          <span className="font-bold text-lg">Hand {handsPlayed + 1}/{maxHands}</span>
 
           <button
             onClick={onOpenSettings}
@@ -622,28 +584,6 @@ function Header({
           >
             {'\u2699'} Settings
           </button>
-        </div>
-
-        {/* Row 2: Stack bar */}
-        <div className="flex items-center gap-4">
-          <div className="flex-1">
-            <div className="flex justify-between text-sm mb-1">
-              <span>
-                Stack: <span className="font-bold">${stack}</span>
-                <span className="text-gray-500 ml-2">Hand {handsPlayed + 1}/{maxHands}</span>
-              </span>
-              <span className={profit >= 0 ? 'text-green-500 font-bold' : 'text-red-500 font-bold'}>
-                {profit >= 0 ? '+' : ''}${profit} / ${targetProfit} target
-              </span>
-            </div>
-            {/* Progress bar to target */}
-            <div className="h-4 bg-gray-300 dark:bg-gray-700 rounded-full overflow-hidden shadow-inner border border-gray-400 dark:border-gray-600">
-              <div
-                className={`h-full transition-all rounded-full ${profit >= 0 ? 'bg-gradient-to-b from-green-400 to-green-600' : 'bg-gradient-to-b from-red-400 to-red-600'}`}
-                style={{ width: `${Math.min(Math.max((profit / targetProfit) * 100, 0), 100)}%` }}
-              />
-            </div>
-          </div>
         </div>
       </div>
     </header>
@@ -698,7 +638,6 @@ function FeedbackCallout({
 }
 
 function ActionFeed({ actions }: { actions: ActionEntry[] }) {
-  // Group actions by street
   const streets = ['preflop', 'flop', 'turn', 'river', 'showdown'] as const
   const groupedActions: Record<string, ActionEntry[]> = {}
 
@@ -709,30 +648,14 @@ function ActionFeed({ actions }: { actions: ActionEntry[] }) {
     groupedActions[action.street].push(action)
   }
 
-  // Cards are strings like "As" (Ace of spades), "Kh" (King of hearts)
-  const formatCard = (card: string) => {
-    if (!card || typeof card !== 'string') return '??'
-    const suitSymbols: Record<string, string> = {
-      s: '\u2660',
-      h: '\u2665',
-      d: '\u2666',
-      c: '\u2663',
-    }
-    const rank = card.slice(0, -1) // Everything except last char
-    const suit = card.slice(-1) // Last char
-    return `${rank}${suitSymbols[suit] || suit}`
-  }
-
   const getActorColor = (actor: string) => {
     switch (actor) {
       case 'hero':
-        return 'text-blue-600 dark:text-blue-400'
+        return 'text-blue-400'
       case 'villain':
-        return 'text-red-600 dark:text-red-400'
-      case 'dealer':
-        return 'text-gray-500 dark:text-gray-400'
+        return 'text-red-400'
       default:
-        return ''
+        return 'text-gray-400'
     }
   }
 
@@ -742,40 +665,31 @@ function ActionFeed({ actions }: { actions: ActionEntry[] }) {
         return 'You'
       case 'villain':
         return 'Villain'
-      case 'dealer':
-        return 'Dealer'
       default:
         return actor
     }
   }
 
   return (
-    <div className="bg-gray-100 dark:bg-gray-800 rounded-xl p-4 sticky top-24">
-      <h3 className="font-semibold text-sm mb-3 text-gray-700 dark:text-gray-300">Action History</h3>
-      <div className="space-y-3 max-h-96 overflow-y-auto">
+    <div>
+      <h3 className="font-semibold text-sm mb-3 text-white/70">Action History</h3>
+      <div className="space-y-3 max-h-80 overflow-y-auto text-sm">
         {streets.map((street) => {
           const streetActions = groupedActions[street]
           if (!streetActions || streetActions.length === 0) return null
 
           return (
             <div key={street}>
-              <div className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">
+              <div className="text-xs font-medium text-white/50 uppercase tracking-wide mb-1">
                 {street}
               </div>
               <div className="space-y-1">
                 {streetActions.map((action, idx) => (
-                  <div key={idx} className="text-sm flex items-center gap-2">
+                  <div key={idx} className="flex items-center gap-2">
                     <span className={`font-medium ${getActorColor(action.actor)}`}>
                       {getActorLabel(action.actor)}
                     </span>
-                    <span className="text-gray-600 dark:text-gray-300">
-                      {action.action}
-                      {action.cards && action.cards.length > 0 && (
-                        <span className="ml-1 font-mono">
-                          [{action.cards.map(formatCard).join(' ')}]
-                        </span>
-                      )}
-                    </span>
+                    <span className="text-white">{action.action}</span>
                   </div>
                 ))}
               </div>

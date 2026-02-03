@@ -139,7 +139,7 @@ function ScenarioDisplay({ puzzle }: { puzzle: Puzzle }) {
   if (type === 'comparison' && 'handA' in scenario) {
     const s = scenario as HandComparisonScenario
     return (
-      <div className="bg-green-800 dark:bg-green-900 rounded-xl p-6">
+      <div className="rounded-xl p-6">
         <div className="flex justify-center mb-4">
           <Board cards={s.board} />
         </div>
@@ -155,7 +155,7 @@ function ScenarioDisplay({ puzzle }: { puzzle: Puzzle }) {
   if ('heroCards' in scenario && 'board' in scenario) {
     const s = scenario as HeroScenario
     return (
-      <div className="bg-green-800 dark:bg-green-900 rounded-xl p-6">
+      <div className="rounded-xl p-6">
         {s.board && s.board.length > 0 && (
           <div className="flex justify-center mb-4">
             <Board cards={s.board} />

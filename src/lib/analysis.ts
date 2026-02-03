@@ -536,13 +536,10 @@ export function processAction(
     ? [...state.handHistory, newHand]
     : state.handHistory
 
-  // Check if session is complete
-  const profit = newStack - state.startingStack
+  // Check if session is complete (only when all hands played or player is broke)
   const sessionComplete =
     newHand.isHandComplete &&
-    (profit >= state.targetProfit ||
-      state.handsPlayed + 1 >= state.maxHands ||
-      newStack <= 0)
+    (state.handsPlayed + 1 >= state.maxHands || newStack <= 0)
 
   return {
     ...state,

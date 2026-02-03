@@ -6,17 +6,17 @@ interface CardProps {
 }
 
 const suitSymbols: Record<string, string> = {
-  s: '\u2660', // spade
-  h: '\u2665', // heart
-  d: '\u2666', // diamond
-  c: '\u2663', // club
+  s: '♠',
+  h: '♥',
+  d: '♦',
+  c: '♣',
 }
 
 const suitColors: Record<string, string> = {
   s: 'text-gray-900',
   c: 'text-gray-900',
-  h: 'text-red-600',
-  d: 'text-red-600',
+  h: 'text-red-500',
+  d: 'text-red-500',
 }
 
 const rankDisplay: Record<string, string> = {
@@ -28,9 +28,21 @@ const rankDisplay: Record<string, string> = {
 }
 
 const sizes = {
-  sm: 'w-8 h-11 text-xs',
-  md: 'w-12 h-16 text-sm',
-  lg: 'w-16 h-22 text-lg',
+  sm: {
+    card: 'w-10 h-14',
+    rank: 'text-base',
+    suit: 'text-xl',
+  },
+  md: {
+    card: 'w-14 h-20',
+    rank: 'text-xl',
+    suit: 'text-3xl',
+  },
+  lg: {
+    card: 'w-20 h-28',
+    rank: 'text-3xl',
+    suit: 'text-5xl',
+  },
 }
 
 export function Card({ card, size = 'md' }: CardProps) {
@@ -39,23 +51,37 @@ export function Card({ card, size = 'md' }: CardProps) {
   const displayRank = rankDisplay[rank] || rank
   const symbol = suitSymbols[suit]
   const color = suitColors[suit]
+  const sizeConfig = sizes[size]
 
   return (
-    <div
-      className={`
-        ${sizes[size]}
-        ${color}
-        bg-white
-        border border-gray-300
-        rounded-md
-        flex flex-col items-center justify-center
-        font-bold
-        shadow-sm
-        select-none
-      `}
-    >
-      <span className="leading-none">{displayRank}</span>
-      <span className="leading-none">{symbol}</span>
+    <div className="relative">
+      {/* Dotted outline shadow offset behind */}
+      <div
+        className={`
+          ${sizeConfig.card}
+          absolute top-1 left-1
+          border-2 border-dashed border-white/50
+          rounded-lg
+        `}
+      />
+      {/* Main card */}
+      <div
+        className={`
+          ${sizeConfig.card}
+          ${color}
+          relative
+          bg-white
+          border-2 border-gray-200 dark:border-gray-300
+          rounded-lg
+          flex flex-col items-center justify-center gap-0.5
+          font-bold
+          select-none
+          overflow-visible
+        `}
+      >
+        <span className={`${sizeConfig.rank} font-bold`}>{displayRank}</span>
+        <span className={`${sizeConfig.suit}`}>{symbol}</span>
+      </div>
     </div>
   )
 }
