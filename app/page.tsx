@@ -110,17 +110,18 @@ export default function Home() {
         <div className="mb-8">
           <button
             onClick={handleStartAnalysis}
-            className="w-full p-6 bg-gradient-to-r from-purple-600 to-blue-600 rounded-xl text-white text-left hover:from-purple-700 hover:to-blue-700 transition-all"
+            aria-label="Start Analysis Mode - Play real hands with dynamic cards"
+            className="w-full p-6 min-h-[80px] bg-gradient-to-r from-purple-600 to-blue-600 rounded-xl text-white text-left hover:from-purple-700 hover:to-blue-700 transition-colors"
           >
             <div className="flex items-center gap-4">
-              <div className="text-4xl">{'\u{1F3AE}'}</div>
+              <div className="text-4xl" aria-hidden="true">{'\u{1F3AE}'}</div>
               <div>
                 <h2 className="text-xl font-bold">Analysis Mode</h2>
                 <p className="text-white/80 text-sm">
                   Play real hands with dynamic cards and get detailed performance analysis
                 </p>
               </div>
-              <div className="ml-auto text-2xl">{'\u2192'}</div>
+              <div className="ml-auto text-2xl" aria-hidden="true">{'\u2192'}</div>
             </div>
           </button>
         </div>

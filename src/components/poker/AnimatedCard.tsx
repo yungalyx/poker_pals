@@ -53,12 +53,13 @@ export function AnimatedCard({
 
   return (
     <div
-      className="relative transition-all duration-300 ease-out"
+      className="relative"
       style={{
         transform: isVisible
           ? `translateY(0) translateX(0) rotate(${rotation}deg)`
           : getInitialTransform(),
         opacity: isVisible ? 1 : 0,
+        transition: 'transform 300ms ease-out, opacity 300ms ease-out',
       }}
     >
       <div

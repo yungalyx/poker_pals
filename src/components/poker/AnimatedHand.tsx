@@ -41,12 +41,14 @@ export function AnimatedHand({
         `}
       >
         <AnimatedCard
+          key={`${animationKey}-${cards[0]}`}
           card={cards[0]}
           size={size}
           delay={shouldAnimate ? startDelay : 0}
           fromPosition="left"
         />
         <AnimatedCard
+          key={`${animationKey}-${cards[1]}`}
           card={cards[1]}
           size={size}
           delay={shouldAnimate ? startDelay + 150 : 0}

@@ -105,7 +105,7 @@ export function PuzzleCard({ puzzle, onAnswer }: PuzzleCardProps) {
           disabled={!selected}
           className={`
             w-full py-3 px-6 rounded-lg font-semibold
-            transition-all duration-150
+            transition-colors duration-150
             ${
               selected
                 ? 'bg-blue-600 hover:bg-blue-700 text-white'

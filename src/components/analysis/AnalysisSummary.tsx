@@ -382,14 +382,14 @@ export function AnalysisSummary({ analysis, onNewSession, onExit }: AnalysisSumm
         <div className="flex gap-4 opacity-0 animate-fade-in-up animation-delay-700">
           <button
             onClick={onNewSession}
-            className="flex-1 py-4 btn-gradient-cyan text-gray-900 font-bold rounded-2xl transition-all duration-200 btn-press hover:scale-[1.02]"
+            className="flex-1 py-4 btn-gradient-cyan text-gray-900 font-bold rounded-2xl transition-colors duration-200 btn-press hover:scale-[1.02]"
           >
             Play Again
           </button>
           <button
             onClick={handleShare}
             disabled={isGenerating}
-            className="flex-1 py-4 btn-gradient-purple disabled:opacity-50 disabled:shadow-none text-white font-bold rounded-2xl transition-all duration-200 flex items-center justify-center gap-2 btn-press hover:scale-[1.02]"
+            className="flex-1 py-4 btn-gradient-purple disabled:opacity-50 disabled:shadow-none text-white font-bold rounded-2xl transition-colors duration-200 flex items-center justify-center gap-2 btn-press hover:scale-[1.02]"
           >
             {isGenerating ? (
               <>
@@ -404,7 +404,7 @@ export function AnalysisSummary({ analysis, onNewSession, onExit }: AnalysisSumm
           </button>
           <button
             onClick={onExit}
-            className="flex-1 py-4 bg-gray-200 dark:bg-gray-800 hover:bg-gray-300 dark:hover:bg-gray-700 font-bold rounded-2xl shadow-sm hover:shadow-md transition-all duration-200 btn-press"
+            className="flex-1 py-4 bg-gray-200 dark:bg-gray-800 hover:bg-gray-300 dark:hover:bg-gray-700 font-bold rounded-2xl shadow-sm hover:shadow-md transition-colors duration-200 btn-press"
           >
             Back to Lessons
           </button>
@@ -447,7 +447,7 @@ export function AnalysisSummary({ analysis, onNewSession, onExit }: AnalysisSumm
               </button>
               <button
                 onClick={handleSaveImage}
-                className="flex-1 py-4 btn-gradient-purple text-white font-bold rounded-2xl transition-all duration-200 flex items-center justify-center gap-2 btn-press hover:scale-[1.02]"
+                className="flex-1 py-4 btn-gradient-purple text-white font-bold rounded-2xl transition-colors duration-200 flex items-center justify-center gap-2 btn-press hover:scale-[1.02]"
               >
                 {'\u2B07'} Save Image
               </button>
@@ -491,7 +491,7 @@ function ScoreBar({
       </div>
       <div className="h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
         <div
-          className={`h-full rounded-full transition-all duration-1000 ease-out ${
+          className={`h-full rounded-full transition-colors duration-1000 ease-out ${
             percentage >= 80
               ? 'bg-gradient-to-r from-green-500 to-green-400'
               : percentage >= 60
@@ -639,7 +639,7 @@ function PlayerProfile({
 
           {/* Position marker with animation */}
           <div
-            className="absolute w-4 h-4 bg-gray-900 dark:bg-white rounded-full border-2 border-white dark:border-gray-900 shadow-lg transform -translate-x-1/2 -translate-y-1/2 z-10 transition-all duration-1000 ease-out"
+            className="absolute w-4 h-4 bg-gray-900 dark:bg-white rounded-full border-2 border-white dark:border-gray-900 shadow-lg transform -translate-x-1/2 -translate-y-1/2 z-10 transition-colors duration-1000 ease-out"
             style={{
               // X: left = passive, right = aggressive (scale 0-4 aggression to 0-100%)
               left: `${Math.min(Math.max((aggression / 4) * 100, 5), 95)}%`,
@@ -736,7 +736,7 @@ function StyleSpectrum({
 
         {/* Position marker */}
         <div
-          className="absolute top-0 bottom-0 w-1 bg-gray-900 dark:bg-white shadow-lg transition-all duration-700 ease-out"
+          className="absolute top-0 bottom-0 w-1 bg-gray-900 dark:bg-white shadow-lg transition-colors duration-700 ease-out"
           style={{ left: `calc(${position}% - 2px)` }}
         >
           {/* Marker arrow */}
@@ -772,6 +772,19 @@ function LastHandSummary({
   const boardToShow = hand.fullBoard || hand.board
   const heroResult = evaluateHand(hand.heroCards, boardToShow)
   const villainResult = evaluateHand(hand.villainCards, boardToShow)
+
+  // Debug validation: check for duplicate cards
+  const allCards = [...hand.heroCards, ...hand.villainCards, ...boardToShow]
+  const uniqueCards = new Set(allCards)
+  if (uniqueCards.size !== allCards.length) {
+    console.error('DISPLAY ERROR: Duplicate cards detected!', {
+      heroCards: hand.heroCards,
+      villainCards: hand.villainCards,
+      board: boardToShow,
+      heroEval: heroResult.description,
+      villainEval: villainResult.description,
+    })
+  }
 
   // Get decisions for this hand
   const handDecisions = decisions.filter(d => d.handNumber === hand.handNumber)
@@ -931,7 +944,7 @@ function LastHandSummary({
               {handDecisions.map((decision, idx) => (
                 <div
                   key={idx}
-                  className={`p-4 rounded-2xl transition-all duration-200 ${
+                  className={`p-4 rounded-2xl transition-colors duration-200 ${
                     decision.wasOptimal
                       ? 'bg-gradient-to-r from-green-50 to-green-100/50 dark:from-green-900/30 dark:to-green-900/10 border border-green-200 dark:border-green-800'
                       : 'bg-gradient-to-r from-red-50 to-red-100/50 dark:from-red-900/30 dark:to-red-900/10 border border-red-200 dark:border-red-800'

@@ -37,6 +37,22 @@ export function createAnalysisSession(
   }
 }
 
+// Validate that all cards in a deal are unique
+function validateDeal(heroCards: Card[], villainCards: Card[], board: Card[]): boolean {
+  const allCards = [...heroCards, ...villainCards, ...board]
+  const uniqueCards = new Set(allCards)
+  if (uniqueCards.size !== allCards.length) {
+    console.error('CRITICAL: Duplicate cards detected!', {
+      heroCards,
+      villainCards,
+      board,
+      duplicates: allCards.filter((card, index) => allCards.indexOf(card) !== index)
+    })
+    return false
+  }
+  return true
+}
+
 // Deal a new hand
 export function dealNewHand(state: AnalysisGameState): AnalysisGameState {
   const deck = shuffleDeck(createDeck())
@@ -44,6 +60,13 @@ export function dealNewHand(state: AnalysisGameState): AnalysisGameState {
   const { cards: heroCards, remaining: deck1 } = dealCards(deck, 2)
   const { cards: villainCards, remaining: deck2 } = dealCards(deck1, 2)
   const { cards: board } = dealCards(deck2, 5)
+
+  // Validate no duplicate cards
+  if (!validateDeal(heroCards, villainCards, board)) {
+    // If validation fails, try dealing again with a fresh deck
+    console.warn('Re-dealing due to duplicate cards')
+    return dealNewHand(state)
+  }
 
   const heroPosition = state.handsPlayed % 2 === 0 ? 'BTN' : 'BB'
   const blinds = heroPosition === 'BB' ? 10 : 5
@@ -76,6 +99,7 @@ export function dealNewHand(state: AnalysisGameState): AnalysisGameState {
     isHandComplete: false,
     winner: null,
     actionHistory: initialActions,
+    heroInvested: blinds, // Track how much hero has put in (starts with blind)
   }
 
   return {
@@ -433,7 +457,16 @@ export function processAction(
     evImpact,
   }
 
-  let newHand = { ...hand, actionHistory: [...hand.actionHistory] }
+  // Deep copy the hand to prevent any mutation issues with card arrays
+  let newHand = {
+    ...hand,
+    heroCards: [...hand.heroCards] as [Card, Card],
+    villainCards: [...hand.villainCards] as [Card, Card],
+    board: [...hand.board],
+    fullBoard: [...hand.fullBoard],
+    actionHistory: [...hand.actionHistory],
+    heroInvested: hand.heroInvested,
+  }
   let newStack = state.currentStack
 
   // Process the action
@@ -447,6 +480,9 @@ export function processAction(
     newHand.winner = 'villain'
     // Hero loses what they've put in
   } else if (action === 'call' || action === 'check') {
+    // Check if calling an all-in
+    const isCallingAllIn = hand.toCall >= hand.heroStack || hand.toCall >= hand.villainStack
+
     if (action === 'check') {
       newHand.actionHistory.push({
         street: hand.street,
@@ -454,35 +490,48 @@ export function processAction(
         action: 'checks',
       })
     } else {
+      const callText = isCallingAllIn ? `calls all-in $${hand.toCall}` : `calls $${hand.toCall}`
       newHand.actionHistory.push({
         street: hand.street,
         actor: 'hero',
-        action: `calls $${hand.toCall}`,
+        action: callText,
         amount: hand.toCall,
       })
     }
     newStack -= hand.toCall
     newHand.pot += hand.toCall
     newHand.heroStack -= hand.toCall
+    newHand.heroInvested += hand.toCall // Track hero's investment
     newHand.toCall = 0
 
-    // Progress to next street or showdown
-    newHand = progressStreet(newHand)
+    // If calling an all-in, go straight to showdown
+    if (isCallingAllIn && action === 'call') {
+      newHand.board = newHand.fullBoard
+      newHand.street = 'showdown'
+      newHand.isHandComplete = true
+    } else {
+      // Progress to next street or showdown
+      newHand = progressStreet(newHand)
+    }
   } else if (action === 'raise' || action === 'bet') {
     const raiseAmount = betAmount || Math.round(hand.pot * 0.66)
+    const effectiveStack = Math.min(hand.heroStack, hand.villainStack)
+    const isAllIn = raiseAmount >= effectiveStack
 
     if (action === 'bet') {
+      const actionText = isAllIn ? `goes all-in $${raiseAmount}` : `bets $${raiseAmount}`
       newHand.actionHistory.push({
         street: hand.street,
         actor: 'hero',
-        action: `bets $${raiseAmount}`,
+        action: actionText,
         amount: raiseAmount,
       })
     } else {
+      const actionText = isAllIn ? `goes all-in $${hand.toCall + raiseAmount}` : `raises to $${hand.toCall + raiseAmount}`
       newHand.actionHistory.push({
         street: hand.street,
         actor: 'hero',
-        action: `raises to $${hand.toCall + raiseAmount}`,
+        action: actionText,
         amount: hand.toCall + raiseAmount,
       })
     }
@@ -490,20 +539,30 @@ export function processAction(
     newStack -= hand.toCall + raiseAmount
     newHand.pot += hand.toCall + raiseAmount
     newHand.heroStack -= hand.toCall + raiseAmount
+    newHand.heroInvested += hand.toCall + raiseAmount // Track hero's investment
 
     // Villain response based on hand strength
     const villainResponse = getVillainResponse(newHand, raiseAmount)
 
     if (villainResponse === 'call' || villainResponse === 'raise') {
+      const callText = isAllIn ? `calls all-in $${raiseAmount}` : `calls $${raiseAmount}`
       newHand.actionHistory.push({
         street: hand.street,
         actor: 'villain',
-        action: `calls $${raiseAmount}`,
+        action: callText,
         amount: raiseAmount,
       })
       newHand.pot += raiseAmount
       newHand.villainStack -= raiseAmount
-      newHand = progressStreet(newHand)
+
+      // If someone is all-in, go straight to showdown
+      if (isAllIn || newHand.heroStack <= 0 || newHand.villainStack <= 0) {
+        newHand.board = newHand.fullBoard
+        newHand.street = 'showdown'
+        newHand.isHandComplete = true
+      } else {
+        newHand = progressStreet(newHand)
+      }
     } else {
       // Villain folds
       newHand.actionHistory.push({
@@ -559,15 +618,38 @@ function getVillainResponse(hand: HandState, raiseAmount: number): 'call' | 'rai
   if (hand.street === 'preflop') {
     // Preflop: use preflop hand strength
     const villainStrength = getPreflopStrength(hand.villainCards[0], hand.villainCards[1])
+    const isVillainInPosition = hand.heroPosition === 'BB' // Villain is BTN when hero is BB
+    const facingLargeRaise = raiseAmount > hand.pot * 0.75
 
-    // Premium hands always continue
-    if (villainStrength >= 75) return 'raise'
-    if (villainStrength >= 55) return 'call'
+    // Premium hands always continue aggressively
+    if (villainStrength >= 80) return 'raise'
 
-    // Medium hands call if pot odds are good
-    if (villainStrength >= 40 && potOdds <= 25) return 'call'
+    // Strong hands call or raise
+    if (villainStrength >= 65) {
+      return Math.random() > 0.7 ? 'raise' : 'call'
+    }
 
-    // Weak hands fold
+    // Playable hands - call more often, especially in position
+    if (villainStrength >= 50) return 'call'
+
+    // Medium hands - defend sometimes, more often in position
+    if (villainStrength >= 40) {
+      const defendChance = isVillainInPosition ? 0.6 : 0.4
+      if (Math.random() < defendChance) return 'call'
+      // Fold to very large raises with medium hands
+      if (facingLargeRaise) return 'fold'
+      return 'call'
+    }
+
+    // Weaker hands - occasionally defend to avoid being exploited
+    if (villainStrength >= 30) {
+      const defendChance = isVillainInPosition ? 0.35 : 0.2
+      if (!facingLargeRaise && Math.random() < defendChance) return 'call'
+      return 'fold'
+    }
+
+    // Junk hands fold, but occasionally bluff-raise with very weak hands
+    if (Math.random() < 0.05) return 'raise' // 5% bluff raise
     return 'fold'
   }
 
@@ -607,7 +689,16 @@ function getVillainResponse(hand: HandState, raiseAmount: number): 'call' | 'rai
 }
 
 function progressStreet(hand: HandState): HandState {
-  const newHand = { ...hand, actionHistory: [...hand.actionHistory] }
+  // Deep copy to prevent mutation issues
+  const newHand = {
+    ...hand,
+    heroCards: [...hand.heroCards] as [Card, Card],
+    villainCards: [...hand.villainCards] as [Card, Card],
+    board: [...hand.board],
+    fullBoard: [...hand.fullBoard],
+    actionHistory: [...hand.actionHistory],
+    heroInvested: hand.heroInvested,
+  }
 
   switch (hand.street) {
     case 'preflop':
@@ -666,35 +757,57 @@ function applyVillainBettingAction(hand: HandState): void {
   const heroEval = evaluateHand(hand.heroCards, hand.board)
 
   const villainIsAhead = villainEval.strength >= heroEval.strength
+  const villainHasMonster = villainEval.strength >= 500 // Flush or better
   const villainHasStrong = villainEval.strength >= 300 // Two pair or better
   const villainHasMade = villainEval.strength >= 200 // Pair or better
+
+  // Effective stack for all-in sizing
+  const effectiveStack = Math.min(hand.heroStack, hand.villainStack)
 
   // Bet sizing based on street
   const betSizePct = hand.street === 'flop' ? 0.5 : hand.street === 'turn' ? 0.66 : 0.75
 
-  // Decide whether to bet
+  // Decide whether to bet and how much
   let shouldBet = false
+  let shouldAllIn = false
 
-  if (villainHasStrong) {
+  if (villainHasMonster && villainIsAhead) {
+    // Monster hand: go all-in sometimes for max value
+    shouldBet = true
+    shouldAllIn = Math.random() > 0.5 && hand.street !== 'flop' // More likely on turn/river
+  } else if (villainHasStrong) {
     // Strong hand: bet for value most of the time
     shouldBet = Math.random() > 0.2
+    // Occasionally all-in on river with strong hands
+    if (hand.street === 'river' && Math.random() > 0.7) {
+      shouldAllIn = true
+    }
   } else if (villainHasMade && villainIsAhead) {
     // Made hand and ahead: bet for value sometimes
     shouldBet = Math.random() > 0.4
   } else if (!villainHasMade && Math.random() > 0.75) {
     // No made hand: occasional bluff (25% of the time)
     shouldBet = true
+    // Rare all-in bluff on river
+    if (hand.street === 'river' && Math.random() > 0.9) {
+      shouldAllIn = true
+    }
   }
 
   if (shouldBet) {
-    hand.toCall = Math.round(hand.pot * betSizePct)
-    hand.lastAction = `Villain bets $${hand.toCall}`
+    const betAmount = shouldAllIn ? effectiveStack : Math.round(hand.pot * betSizePct)
+    hand.toCall = Math.min(betAmount, effectiveStack) // Can't bet more than effective stack
+    const actionText = shouldAllIn ? `goes all-in $${hand.toCall}` : `bets $${hand.toCall}`
+    hand.lastAction = `Villain ${actionText}`
     hand.actionHistory.push({
       street: hand.street,
       actor: 'villain',
-      action: `bets $${hand.toCall}`,
+      action: actionText,
       amount: hand.toCall,
     })
+    // Add villain's bet to the pot and deduct from villain's stack
+    hand.pot += hand.toCall
+    hand.villainStack -= hand.toCall
   } else {
     hand.toCall = 0
     hand.lastAction = 'Villain checks'

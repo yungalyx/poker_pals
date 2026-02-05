@@ -56,10 +56,11 @@ export function OptionButton({
     <button
       onClick={onClick}
       disabled={disabled}
+      aria-pressed={selected}
       className={`
-        w-full p-4 text-left
+        w-full min-h-[56px] p-4 text-left
         border-2 rounded-lg
-        transition-all duration-150
+        transition-colors duration-150
         ${stateClasses}
         ${disabled ? 'cursor-default' : 'cursor-pointer'}
       `}

@@ -41,9 +41,10 @@ export function AnimatedBoard({ cards, size = 'md', animationKey }: AnimatedBoar
       </span>
       <div className="flex gap-2">
         {slots.map((i) => (
-          <div key={i} className="relative">
+          <div key={`${animationKey}-${i}-${displayedCards[i] || 'empty'}`} className="relative">
             {displayedCards[i] ? (
               <AnimatedCard
+                key={`${animationKey}-card-${displayedCards[i]}`}
                 card={displayedCards[i]}
                 size={size}
                 delay={i >= prevLength ? (i - prevLength) * 150 : 0}

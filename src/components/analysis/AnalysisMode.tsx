@@ -204,7 +204,7 @@ export function AnalysisMode({ onExit }: AnalysisModeProps) {
   if (!hand && !isHandComplete) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <button onClick={handleNextHand} className="px-8 py-4 bg-blue-500 hover:bg-blue-400 text-white text-lg font-bold rounded-xl border-b-4 border-blue-700 active:border-b-0 active:mt-1 active:mb-[-4px] transition-all shadow-lg">
+        <button onClick={handleNextHand} className="px-8 py-4 bg-blue-500 hover:bg-blue-400 text-white text-lg font-bold rounded-xl border-b-4 border-blue-700 active:border-b-0 active:mt-1 active:mb-[-4px] transition-colors shadow-lg">
           Deal First Hand
         </button>
       </div>
@@ -223,9 +223,25 @@ export function AnalysisMode({ onExit }: AnalysisModeProps) {
     heroHandDescription = heroResult.description
     villainHandDescription = villainResult.description
 
+    // Debug validation: check for duplicate cards
+    const allCards = [...lastHand.heroCards, ...lastHand.villainCards, ...boardToShow]
+    const uniqueCards = new Set(allCards)
+    if (uniqueCards.size !== allCards.length) {
+      console.error('HAND RESULT ERROR: Duplicate cards detected!', {
+        heroCards: lastHand.heroCards,
+        villainCards: lastHand.villainCards,
+        board: boardToShow,
+        heroEval: heroHandDescription,
+        villainEval: villainHandDescription,
+      })
+    }
+
     // Determine result type
     const heroFolded = lastHand.actionHistory?.some(
       a => a.actor === 'hero' && a.action === 'folds'
+    )
+    const villainFolded = lastHand.actionHistory?.some(
+      a => a.actor === 'villain' && a.action === 'folds'
     )
 
     // Check if user played the ENTIRE hand correctly (all decisions optimal)
@@ -237,24 +253,34 @@ export function AnalysisMode({ onExit }: AnalysisModeProps) {
     const isDisciplinedFold = heroFolded && lastDecisionCorrect
     const isBadBeat = lastHand.winner === 'villain' && !heroFolded && allDecisionsOptimal
 
-    if (lastHand.winner === 'hero') {
+    // Calculate net profit/loss (what hero actually gained/lost, not total pot)
+    const heroInvested = lastHand.heroInvested || 0
+    const netProfit = lastHand.pot - heroInvested // What hero wins from villain
+    const netLoss = heroInvested // What hero loses to villain
+
+    if (lastHand.winner === 'hero' && villainFolded) {
+      modalResult = 'villain-fold'
+      modalAmount = netProfit
+    } else if (lastHand.winner === 'hero') {
       modalResult = 'win'
-      modalAmount = lastHand.pot
+      modalAmount = netProfit
     } else if (lastHand.winner === 'tie') {
       modalResult = 'split'
-      modalAmount = Math.floor(lastHand.pot / 2)
+      // In a split, hero gets back their investment plus half of villain's
+      const villainInvested = lastHand.pot - heroInvested
+      modalAmount = Math.floor(villainInvested / 2)
     } else if (isDisciplinedFold) {
       modalResult = 'disciplined-fold'
-      modalAmount = 0
+      modalAmount = heroInvested // What hero saved by folding (already lost)
     } else if (isBadBeat) {
       modalResult = 'bad-beat'
-      modalAmount = lastHand.pot
+      modalAmount = netLoss
     } else if (heroFolded) {
       modalResult = 'fold'
-      modalAmount = lastHand.pot
+      modalAmount = heroInvested // What hero lost by folding
     } else {
       modalResult = 'loss'
-      modalAmount = lastHand.pot
+      modalAmount = netLoss
     }
   }
 
@@ -274,11 +300,15 @@ export function AnalysisMode({ onExit }: AnalysisModeProps) {
   const canCheck = hand?.toCall === 0
   const villainRaised = hand?.lastAction?.includes('bets') || hand?.lastAction?.includes('raises')
   const raiseLabel = canCheck ? 'Bet' : villainRaised ? 'Re-raise' : 'Raise'
+  // Effective stack is the minimum of hero and villain stacks (max you can win/lose)
+  const effectiveStack = hand ? Math.min(hand.heroStack, hand.villainStack) : 0
+  const allInAmount = effectiveStack
   const betSizes = hand ? [
-    { label: '1/3 Pot', amount: Math.round(hand.pot * 0.33) },
-    { label: '2/3 Pot', amount: Math.round(hand.pot * 0.66) },
-    { label: 'Pot', amount: hand.pot },
-  ] : []
+    { label: '1/3 Pot', amount: Math.round(hand.pot * 0.33), isAllIn: false },
+    { label: '2/3 Pot', amount: Math.round(hand.pot * 0.66), isAllIn: false },
+    { label: 'Pot', amount: hand.pot, isAllIn: false },
+    { label: 'All In', amount: allInAmount, isAllIn: true },
+  ].filter(size => size.isAllIn || size.amount < allInAmount) : [] // Don't show sizes >= all-in except all-in itself
 
   // Show villain cards when hand is complete
   const shouldShowVillainCards = showVillainCards || isHandComplete
@@ -376,7 +406,8 @@ export function AnalysisMode({ onExit }: AnalysisModeProps) {
                 />
                 <button
                   onClick={() => handleAction('fold')}
-                  className="w-full py-4 bg-red-500 hover:bg-red-400 text-white text-lg font-bold rounded-xl border-b-4 border-red-700 active:border-b-0 active:mt-1 active:mb-[-4px] transition-all shadow-lg"
+                  aria-label="Fold hand"
+                  className="w-full min-h-[48px] py-4 bg-red-500 hover:bg-red-400 text-white text-lg font-bold rounded-xl border-b-4 border-red-700 active:border-b-0 active:mt-1 active:mb-[-4px] transition-colors shadow-lg"
                 >
                   Fold
                 </button>
@@ -390,7 +421,8 @@ export function AnalysisMode({ onExit }: AnalysisModeProps) {
                 />
                 <button
                   onClick={() => handleAction(canCheck ? 'check' : 'call')}
-                  className="w-full py-4 bg-green-500 hover:bg-green-400 text-white text-lg font-bold rounded-xl border-b-4 border-green-700 active:border-b-0 active:mt-1 active:mb-[-4px] transition-all shadow-lg"
+                  aria-label={canCheck ? 'Check' : `Call ${hand?.toCall || 0} dollars`}
+                  className="w-full min-h-[48px] py-4 bg-green-500 hover:bg-green-400 text-white text-lg font-bold rounded-xl border-b-4 border-green-700 active:border-b-0 active:mt-1 active:mb-[-4px] transition-colors shadow-lg"
                 >
                   {canCheck ? 'Check' : `Call $${hand?.toCall || 0}`}
                 </button>
@@ -407,10 +439,24 @@ export function AnalysisMode({ onExit }: AnalysisModeProps) {
                   />
                   <button
                     onClick={() => handleAction(canCheck ? 'bet' : 'raise', size.amount, index)}
-                    className="w-full py-4 bg-blue-500 hover:bg-blue-400 text-white font-bold rounded-xl border-b-4 border-blue-700 active:border-b-0 active:mt-1 active:mb-[-4px] transition-all shadow-lg"
+                    aria-label={size.isAllIn ? `All in ${size.amount} dollars` : `${raiseLabel} ${size.amount} dollars, ${size.label}`}
+                    className={`w-full min-h-[48px] py-4 text-white font-bold rounded-xl border-b-4 active:border-b-0 active:mt-1 active:mb-[-4px] transition-colors shadow-lg ${
+                      size.isAllIn
+                        ? 'bg-orange-500 hover:bg-orange-400 border-orange-700'
+                        : 'bg-blue-500 hover:bg-blue-400 border-blue-700'
+                    }`}
                   >
-                    <span className="text-base">{raiseLabel} ${size.amount}</span>
-                    <span className="block text-xs opacity-80 mt-0.5">{size.label}</span>
+                    {size.isAllIn ? (
+                      <>
+                        <span className="text-base">All In ${size.amount}</span>
+                        <span className="block text-xs opacity-80 mt-0.5">100%</span>
+                      </>
+                    ) : (
+                      <>
+                        <span className="text-base">{raiseLabel} ${size.amount}</span>
+                        <span className="block text-xs opacity-80 mt-0.5">{size.label}</span>
+                      </>
+                    )}
                   </button>
                 </div>
               ))}
@@ -488,25 +534,33 @@ export function AnalysisMode({ onExit }: AnalysisModeProps) {
         <div
           className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4"
           onClick={() => setShowSettings(false)}
+          onKeyDown={(e) => e.key === 'Escape' && setShowSettings(false)}
+          role="presentation"
         >
           <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="settings-title"
             className="bg-white dark:bg-gray-800 rounded-2xl p-6 max-w-sm w-full shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <h3 className="text-xl font-bold mb-6">Settings</h3>
+            <h3 id="settings-title" className="text-xl font-bold mb-6">Settings</h3>
 
             <div className="space-y-4">
               {/* Buddy Mode */}
               <div className="flex items-center justify-between">
-                <div>
+                <div id="buddy-mode-label">
                   <div className="font-medium">Buddy Mode</div>
                   <div className="text-sm text-gray-500 dark:text-gray-400">
                     Get feedback on your decisions
                   </div>
                 </div>
                 <button
+                  role="switch"
+                  aria-checked={buddyMode}
+                  aria-labelledby="buddy-mode-label"
                   onClick={() => setBuddyMode(!buddyMode)}
-                  className={`relative w-12 h-7 rounded-full transition-colors ${
+                  className={`relative w-12 h-7 min-w-[48px] rounded-full transition-colors ${
                     buddyMode ? 'bg-green-500' : 'bg-gray-300 dark:bg-gray-600'
                   }`}
                 >
@@ -520,15 +574,18 @@ export function AnalysisMode({ onExit }: AnalysisModeProps) {
 
               {/* Timer Mode */}
               <div className="flex items-center justify-between">
-                <div>
+                <div id="timer-mode-label">
                   <div className="font-medium">Timer Mode</div>
                   <div className="text-sm text-gray-500 dark:text-gray-400">
                     30 seconds to decide or auto-fold
                   </div>
                 </div>
                 <button
+                  role="switch"
+                  aria-checked={timerMode}
+                  aria-labelledby="timer-mode-label"
                   onClick={() => setTimerMode(!timerMode)}
-                  className={`relative w-12 h-7 rounded-full transition-colors ${
+                  className={`relative w-12 h-7 min-w-[48px] rounded-full transition-colors ${
                     timerMode ? 'bg-green-500' : 'bg-gray-300 dark:bg-gray-600'
                   }`}
                 >
@@ -571,16 +628,18 @@ function Header({
         <div className="flex items-center justify-between">
           <button
             onClick={onExit}
-            className="px-4 py-2 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 rounded-lg font-medium text-sm transition-colors"
+            aria-label="Exit game"
+            className="min-h-[44px] px-4 py-2 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 rounded-lg font-medium text-sm transition-colors"
           >
             {'\u2190'} Exit
           </button>
 
-          <span className="font-bold text-lg">Hand {handsPlayed + 1}/{maxHands}</span>
+          <span className="font-bold text-lg" aria-live="polite">Hand {handsPlayed + 1}/{maxHands}</span>
 
           <button
             onClick={onOpenSettings}
-            className="px-4 py-2 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 rounded-lg font-medium text-sm transition-colors"
+            aria-label="Open settings"
+            className="min-h-[44px] px-4 py-2 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 rounded-lg font-medium text-sm transition-colors"
           >
             {'\u2699'} Settings
           </button>

@@ -32,6 +32,7 @@ export interface HandState {
   isHandComplete: boolean
   winner: 'hero' | 'villain' | 'tie' | null
   actionHistory: ActionEntry[] // Track all actions in the hand
+  heroInvested: number // Total amount hero has put into the pot this hand
 }
 
 // Player decision tracking

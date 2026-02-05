@@ -12,8 +12,10 @@ export function LessonCard({ lesson, completed, locked, onClick }: LessonCardPro
     <button
       onClick={onClick}
       disabled={locked}
+      aria-label={`${lesson.title}${locked ? ' (Locked)' : completed ? ' (Completed)' : ''}`}
+      aria-disabled={locked}
       className={`
-        w-full p-4 text-left rounded-xl border-2 transition-all
+        w-full min-h-[72px] p-4 text-left rounded-xl border-2 transition-colors
         ${
           locked
             ? 'border-gray-200 dark:border-gray-700 opacity-50 cursor-not-allowed'

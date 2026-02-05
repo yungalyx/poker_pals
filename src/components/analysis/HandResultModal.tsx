@@ -1,6 +1,6 @@
 'use client'
 
-export type ResultType = 'win' | 'loss' | 'fold' | 'disciplined-fold' | 'bad-beat' | 'split'
+export type ResultType = 'win' | 'loss' | 'fold' | 'disciplined-fold' | 'bad-beat' | 'split' | 'villain-fold'
 
 interface HandResultProps {
   isOpen: boolean
@@ -63,6 +63,15 @@ export function HandResultModal({
           amountText: `-$${amount}`,
           label: 'Bad Beat',
           sublabel: 'You played it right, but variance happens. Keep it up!',
+        }
+      case 'villain-fold':
+        return {
+          bgColor: 'bg-green-100 dark:bg-green-900/50',
+          borderColor: 'border-green-500',
+          textColor: 'text-green-600 dark:text-green-400',
+          amountText: `+$${amount}`,
+          label: 'Villain Folded',
+          sublabel: 'Your aggression paid off!',
         }
       case 'fold':
         return {
@@ -138,7 +147,8 @@ export function HandResultModal({
       {/* Continue button */}
       <button
         onClick={onNextHand}
-        className="w-full py-4 bg-blue-500 hover:bg-blue-400 text-white text-lg font-bold rounded-xl border-b-4 border-blue-700 active:border-b-0 active:mt-1 active:mb-[-4px] transition-all shadow-lg"
+        aria-label={`Continue to next hand. Currently on hand ${handsPlayed} of ${maxHands}`}
+        className="w-full min-h-[48px] py-4 bg-blue-500 hover:bg-blue-400 text-white text-lg font-bold rounded-xl border-b-4 border-blue-700 active:border-b-0 active:mt-1 active:mb-[-4px] transition-colors shadow-lg"
       >
         Continue ({handsPlayed}/{maxHands})
       </button>

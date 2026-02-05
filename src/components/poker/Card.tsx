@@ -49,6 +49,7 @@ export function Card({ card, size = 'md' }: CardProps) {
   const rank = card[0]
   const suit = card[1]
   const displayRank = rankDisplay[rank] || rank
+  const isTen = displayRank === '10'
   const symbol = suitSymbols[suit]
   const color = suitColors[suit]
   const sizeConfig = sizes[size]
@@ -79,7 +80,7 @@ export function Card({ card, size = 'md' }: CardProps) {
           overflow-visible
         `}
       >
-        <span className={`${sizeConfig.rank} font-bold`}>{displayRank}</span>
+        <span className={`${sizeConfig.rank} font-bold ${isTen ? '-tracking-[0.1em]' : ''}`}>{displayRank}</span>
         <span className={`${sizeConfig.suit}`}>{symbol}</span>
       </div>
     </div>
