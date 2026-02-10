@@ -16,7 +16,13 @@ import {
   evaluateHand,
   getPreflopStrength,
   calculatePotOdds,
+  HAND_RANK_VALUES,
 } from './poker'
+import {
+  collectTransparencyDataPoint,
+  calculateTransparencyScore,
+  classifyPlayer,
+} from './transparency'
 
 // Initialize a new analysis session
 export function createAnalysisSession(
@@ -34,6 +40,7 @@ export function createAnalysisSession(
     currentHand: null,
     decisions: [],
     handHistory: [],
+    transparencyData: [],
   }
 }
 
@@ -221,12 +228,12 @@ function buildHandContext(hand: HandState): HandContext {
   const rankCounts = countOccurrences(boardRanks.map(String))
   const maxRankCount = Math.max(...Object.values(rankCounts), 0)
 
-  // Determine hand categories
-  const hasFlush = heroEval.strength >= 500 && heroEval.strength < 600
-  const hasStraight = heroEval.strength >= 400 && heroEval.strength < 500
-  const hasSet = heroEval.strength >= 350 && heroEval.strength < 400
-  const hasTwoPair = heroEval.strength >= 300 && heroEval.strength < 350
-  const hasPair = heroEval.strength >= 200 && heroEval.strength < 300
+  // Determine hand categories using rank names
+  const hasFlush = heroEval.rank === 'flush'
+  const hasStraight = heroEval.rank === 'straight'
+  const hasSet = heroEval.rank === 'three-of-a-kind'
+  const hasTwoPair = heroEval.rank === 'two-pair'
+  const hasPair = heroEval.rank === 'pair'
 
   return {
     rawStrength: heroEval.strength,
@@ -595,6 +602,11 @@ export function processAction(
     ? [...state.handHistory, newHand]
     : state.handHistory
 
+  // Collect transparency data when hand completes
+  const newTransparencyData = newHand.isHandComplete
+    ? [...state.transparencyData, collectTransparencyDataPoint(newHand, newDecisions)]
+    : state.transparencyData
+
   // Check if session is complete (only when all hands played or player is broke)
   const sessionComplete =
     newHand.isHandComplete &&
@@ -607,6 +619,7 @@ export function processAction(
     handsPlayed: newHand.isHandComplete ? state.handsPlayed + 1 : state.handsPlayed,
     decisions: newDecisions,
     handHistory: newHistory,
+    transparencyData: newTransparencyData,
     mode: sessionComplete ? 'session-complete' : newHand.isHandComplete ? 'hand-complete' : 'playing',
   }
 }
@@ -658,16 +671,17 @@ function getVillainResponse(hand: HandState, raiseAmount: number): 'call' | 'rai
   const heroEval = evaluateHand(hand.heroCards, hand.board)
 
   // CRITICAL: Never fold when villain has the stronger hand
+  const villainRankVal = HAND_RANK_VALUES[villainEval.rank]
   if (villainEval.strength >= heroEval.strength) {
     // Villain is ahead - always continue
-    if (villainEval.strength >= 400) return 'raise' // Strong hand, raise back
+    if (villainRankVal >= HAND_RANK_VALUES['straight']) return 'raise' // Strong hand, raise back
     return 'call'
   }
 
   // Villain is behind but may still call based on hand strength and pot odds
-  const villainHasStrong = villainEval.strength >= 300 // Two pair or better
-  const villainHasMade = villainEval.strength >= 200 // Pair or better
-  const villainHasDraw = villainEval.strength >= 100 // High card with potential
+  const villainHasStrong = villainRankVal >= HAND_RANK_VALUES['two-pair'] // Two pair or better
+  const villainHasMade = villainRankVal >= HAND_RANK_VALUES['pair'] // Pair or better
+  const villainHasDraw = villainRankVal >= HAND_RANK_VALUES['high-card'] // High card with potential
 
   // Strong hands still call/raise even if slightly behind
   if (villainHasStrong) {
@@ -757,9 +771,10 @@ function applyVillainBettingAction(hand: HandState): void {
   const heroEval = evaluateHand(hand.heroCards, hand.board)
 
   const villainIsAhead = villainEval.strength >= heroEval.strength
-  const villainHasMonster = villainEval.strength >= 500 // Flush or better
-  const villainHasStrong = villainEval.strength >= 300 // Two pair or better
-  const villainHasMade = villainEval.strength >= 200 // Pair or better
+  const villainRankVal = HAND_RANK_VALUES[villainEval.rank]
+  const villainHasMonster = villainRankVal >= HAND_RANK_VALUES['flush'] // Flush or better
+  const villainHasStrong = villainRankVal >= HAND_RANK_VALUES['two-pair'] // Two pair or better
+  const villainHasMade = villainRankVal >= HAND_RANK_VALUES['pair'] // Pair or better
 
   // Effective stack for all-in sizing
   const effectiveStack = Math.min(hand.heroStack, hand.villainStack)
@@ -906,6 +921,22 @@ export function generateAnalysis(state: AnalysisGameState): AnalysisResult {
     strengths.push('Balanced hand selection')
   }
 
+  // Calculate transparency score and player archetype
+  const transparencyScore = calculateTransparencyScore(state.transparencyData)
+  const playerArchetype = classifyPlayer(playStyle, transparencyScore.tScore)
+
+  // Add transparency-based insights
+  if (transparencyScore.confidence !== 'low') {
+    if (transparencyScore.tScore >= 75) {
+      weaknesses.push('Your betting patterns are very predictable (high transparency)')
+      recommendations.push('Mix in some bluffs with your big bets to become less readable')
+    } else if (transparencyScore.tScore <= 25) {
+      strengths.push('Highly deceptive betting patterns — hard for opponents to read')
+    } else {
+      strengths.push('Good balance between value bets and bluffs')
+    }
+  }
+
   // Get the last hand from history
   const lastHand = state.handHistory.length > 0
     ? state.handHistory[state.handHistory.length - 1]
@@ -924,5 +955,7 @@ export function generateAnalysis(state: AnalysisGameState): AnalysisResult {
     weaknesses,
     recommendations,
     lastHand,
+    transparencyScore,
+    playerArchetype,
   }
 }

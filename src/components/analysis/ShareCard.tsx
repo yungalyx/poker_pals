@@ -7,30 +7,14 @@ interface ShareCardProps {
   analysis: AnalysisResult
 }
 
-// Determine player profile type
-function getPlayerProfile(vpip: number, pfr: number, aggression: number) {
-  const isLoose = vpip > 30
-  const isTight = vpip < 22
-  const isAggressive = pfr > 15 || aggression > 1.5
-  const isPassive = pfr < 12 && aggression < 1.2
-
-  if (isLoose && isAggressive) {
-    return { abbrev: 'LAG', name: 'Loose Aggressive', gradient: 'linear-gradient(135deg, #ff2e63 0%, #ff6b9d 100%)' }
-  } else if (isTight && isAggressive) {
-    return { abbrev: 'TAG', name: 'Tight Aggressive', gradient: 'linear-gradient(135deg, #00d4aa 0%, #00fff5 100%)' }
-  } else if (isLoose && isPassive) {
-    return { abbrev: 'LP', name: 'Loose Passive', gradient: 'linear-gradient(135deg, #f97316 0%, #fbbf24 100%)' }
-  } else if (isTight && isPassive) {
-    return { abbrev: 'TP', name: 'Tight Passive', gradient: 'linear-gradient(135deg, #3b82f6 0%, #60a5fa 100%)' }
-  } else {
-    return { abbrev: 'BAL', name: 'Balanced', gradient: 'linear-gradient(135deg, #a855f7 0%, #d946ef 100%)' }
-  }
-}
-
 export const ShareCard = forwardRef<HTMLDivElement, ShareCardProps>(
   function ShareCard({ analysis }, ref) {
-    const { handsPlayed, profit, overallScore, playStyle, reachedTarget } = analysis
-    const profile = getPlayerProfile(playStyle.vpip, playStyle.pfr, playStyle.aggression)
+    const { handsPlayed, profit, overallScore, playStyle, reachedTarget, playerArchetype, transparencyScore } = analysis
+    const profile = {
+      abbrev: playerArchetype.abbrev,
+      name: playerArchetype.archetype,
+      gradient: playerArchetype.gradient,
+    }
 
     return (
       <div
@@ -210,6 +194,11 @@ export const ShareCard = forwardRef<HTMLDivElement, ShareCardProps>(
           <div style={{ textAlign: 'center', flex: 1 }}>
             <div style={{ fontSize: 20, fontWeight: 700 }}>{playStyle.aggression.toFixed(1)}</div>
             <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)', fontWeight: 600 }}>AGG</div>
+          </div>
+          <div style={{ width: 1, background: 'rgba(255,255,255,0.1)' }} />
+          <div style={{ textAlign: 'center', flex: 1 }}>
+            <div style={{ fontSize: 20, fontWeight: 700 }}>{transparencyScore.tScore}</div>
+            <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)', fontWeight: 600 }}>T-SCORE</div>
           </div>
         </div>
 

@@ -22,7 +22,6 @@ export const glossary: Record<string, string> = {
   'draw': 'A hand that needs to improve to win (e.g., 4 cards to a flush).',
   'outs': 'Cards remaining in the deck that will complete your draw.',
   'nuts': 'The best possible hand given the board.',
-  'air': 'A hand with no pair and no draw - complete nothing.',
 
   // Betting terms
   'c-bet': 'Continuation bet - betting the flop after raising preflop.',

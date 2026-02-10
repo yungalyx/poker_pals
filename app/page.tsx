@@ -79,12 +79,12 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
-      <header className="border-b border-gray-200 dark:border-gray-800">
+      <header className="border-b border-white/20">
         <div className="max-w-3xl mx-auto px-4 py-6">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-2xl font-bold">Poker Pals</h1>
-              <p className="text-gray-500 dark:text-gray-400">
+              <h1 className="text-2xl font-bold text-white">Poker Pals</h1>
+              <p className="text-white/80">
                 Learn GTO poker the fun way
               </p>
             </div>
@@ -92,12 +92,12 @@ export default function Home() {
               {progress.streakDays > 0 && (
                 <div className="text-center">
                   <div className="text-2xl">{'\u{1F525}'}</div>
-                  <div className="text-xs text-gray-500">{progress.streakDays} day</div>
+                  <div className="text-xs text-white/60">{progress.streakDays} day</div>
                 </div>
               )}
               <div className="text-center">
-                <div className="text-xl font-bold text-blue-500">{progress.totalXP}</div>
-                <div className="text-xs text-gray-500">XP</div>
+                <div className="text-xl font-bold text-white">{progress.totalXP}</div>
+                <div className="text-xs text-white/60">XP</div>
               </div>
             </div>
           </div>
@@ -127,7 +127,7 @@ export default function Home() {
         </div>
 
         {/* Lessons */}
-        <h2 className="text-lg font-semibold mb-4">Lessons</h2>
+        <h2 className="text-lg font-semibold mb-4 text-white">Lessons</h2>
         {categories.map((category) => (
           <CategorySection
             key={category.id}

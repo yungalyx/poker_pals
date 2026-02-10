@@ -68,6 +68,65 @@ export interface ScoreBreakdown {
   potOddsAccuracy: { score: number; total: number; details: string[] }
 }
 
+// Transparency Index: per-hand data point collected at hand completion
+export interface TransparencyDataPoint {
+  handNumber: number
+  // Pillar A: Linearity data
+  normalizedHandStrength: number // (evaluateHand().strength - 100) / 1100, clamped 0-1
+  investmentRatio: number // heroInvested / pot, clamped 0-1
+  wentToShowdown: boolean // true if hand reached showdown (not a fold)
+  // Pillar B: Polarization data
+  bigBets: {
+    street: string
+    betSizeRatio: number // betAmount / potAtTimeOfBet
+    handStrengthAtBet: number // normalized strength at time of bet (0-1)
+  }[]
+  // Pillar C: Board texture data
+  scareCardEvents: {
+    street: 'turn' | 'river'
+    scareType: 'flush-completing' | 'straight-completing'
+    heroBetAfterScare: boolean
+    heroHadTheHand: boolean
+  }[]
+}
+
+// Transparency score breakdown
+export interface TransparencyScore {
+  linearityScore: number // 0-100, Pillar A
+  polarizationScore: number // 0-100, Pillar B
+  boardTextureScore: number // 0-100, Pillar C
+  tScore: number // 0-100, weighted composite
+  dataPoints: number
+  confidence: 'low' | 'medium' | 'high'
+}
+
+// Player archetype names
+export type PlayerArchetype =
+  | 'The Showboat'
+  | 'The Wildcard'
+  | 'The Glass Cannon'
+  | 'The Assassin'
+  | 'The Open Book'
+  | 'The Sandtrapper'
+  | 'The Statue'
+  | 'The Spider'
+  | 'The Enigma'
+
+// Player archetype display metadata
+export interface PlayerArchetypeInfo {
+  archetype: PlayerArchetype
+  abbrev: string
+  color: string // Tailwind bg class
+  gradient: string // CSS gradient for ShareCard
+  description: string
+  advice: string
+  dimensions: {
+    tightLoose: 'tight' | 'loose' | 'balanced'
+    aggressivePassive: 'aggressive' | 'passive' | 'balanced'
+    deceptiveTransparent: 'deceptive' | 'transparent' | 'balanced'
+  }
+}
+
 // Full analysis result
 export interface AnalysisResult {
   handsPlayed: number
@@ -82,6 +141,8 @@ export interface AnalysisResult {
   weaknesses: string[]
   recommendations: string[]
   lastHand: HandState | null // The final hand of the session
+  transparencyScore: TransparencyScore
+  playerArchetype: PlayerArchetypeInfo
 }
 
 // Analysis mode game state
@@ -95,4 +156,5 @@ export interface AnalysisGameState {
   currentHand: HandState | null
   decisions: Decision[]
   handHistory: HandState[]
+  transparencyData: TransparencyDataPoint[]
 }

@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import type { Action } from '@/types'
 import type { AnalysisGameState, AnalysisResult, ActionEntry } from '@/types/analysis'
 import { AnimatedHand, AnimatedBoard } from '@/components/poker'
-import { evaluateHand } from '@/lib/poker'
+import { evaluateHand, calculateOuts, calculatePotOdds, getKickerDescription } from '@/lib/poker'
 import {
   createAnalysisSession,
   dealNewHand,
@@ -29,6 +29,7 @@ export function AnalysisMode({ onExit }: AnalysisModeProps) {
   const [showVillainCards, setShowVillainCards] = useState(false)
   const [buddyMode, setBuddyMode] = useState(true)
   const [timerMode, setTimerMode] = useState(false)
+  const [showPotOdds, setShowPotOdds] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
   const [timeLeft, setTimeLeft] = useState(TIMER_DURATION)
   const timerRef = useRef<NodeJS.Timeout | null>(null)
@@ -223,6 +224,19 @@ export function AnalysisMode({ onExit }: AnalysisModeProps) {
     heroHandDescription = heroResult.description
     villainHandDescription = villainResult.description
 
+    // When both players share the same hand rank, show kicker info
+    if (heroResult.rank === villainResult.rank && heroResult.strength !== villainResult.strength) {
+      const winnerCards = heroResult.strength > villainResult.strength ? lastHand.heroCards : lastHand.villainCards
+      const kicker = getKickerDescription(winnerCards, boardToShow)
+      if (kicker) {
+        if (heroResult.strength > villainResult.strength) {
+          heroHandDescription = `${heroResult.description}, ${kicker}`
+        } else {
+          villainHandDescription = `${villainResult.description}, ${kicker}`
+        }
+      }
+    }
+
     // Debug validation: check for duplicate cards
     const allCards = [...lastHand.heroCards, ...lastHand.villainCards, ...boardToShow]
     const uniqueCards = new Set(allCards)
@@ -322,8 +336,8 @@ export function AnalysisMode({ onExit }: AnalysisModeProps) {
         onOpenSettings={() => setShowSettings(true)}
       />
 
-      {/* Stack display - fixed bottom right */}
-      <div className="fixed bottom-48 right-48 text-right z-10">
+      {/* Stack display - fixed bottom right, hidden on small screens */}
+      <div className="fixed bottom-48 right-48 text-right z-10 hidden xl:block">
         <div className="flex items-baseline gap-3">
           <span className="text-4xl font-bold text-white">${gameState.currentStack}</span>
           <span className={`text-xl font-bold ${profit >= 0 ? 'text-green-400' : 'text-red-400'}`}>
@@ -373,6 +387,22 @@ export function AnalysisMode({ onExit }: AnalysisModeProps) {
             <AnimatedBoard cards={displayBoard} animationKey={animationKey} />
           </div>
 
+          {/* Pot & Stack - inline display for smaller screens */}
+          <div className="flex justify-center items-center gap-4 mb-3 xl:hidden">
+            <div className="text-center">
+              <span className="text-2xl font-bold text-white">${displayPot}</span>
+              <span className="block text-xs text-white/60">pot</span>
+            </div>
+            <div className="w-px h-8 bg-white/20" />
+            <div className="text-center">
+              <span className="text-2xl font-bold text-white">${gameState.currentStack}</span>
+              <span className={`text-xs font-bold ${profit >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                {' '}{profit >= 0 ? '+' : ''}{profit}
+              </span>
+              <span className="block text-xs text-white/60">stack</span>
+            </div>
+          </div>
+
           {/* Hero */}
           <div className="flex justify-center">
             {displayHeroCards && (
@@ -393,17 +423,33 @@ export function AnalysisMode({ onExit }: AnalysisModeProps) {
           <p className="text-center text-lg mb-4 font-medium">{hand.lastAction}</p>
         )}
 
+        {/* Pot odds & outs widget */}
+        {showPotOdds && gameState.mode === 'playing' && hand && (
+          <PotOddsWidget
+            pot={hand.pot}
+            toCall={hand.toCall}
+            heroCards={hand.heroCards}
+            board={hand.board}
+            street={hand.street}
+          />
+        )}
+
         {/* Action buttons - only show when playing */}
         {gameState.mode === 'playing' && (
           <div className="space-y-4">
             {/* Fold / Check / Call row */}
-            <div className="flex gap-3">
-              {/* Fold button */}
-              <div className="flex-1 relative">
-                <FeedbackCallout
-                  show={buddyMode && lastFeedback?.buttonType === 'fold'}
-                  feedback={lastFeedback}
-                />
+            <div className="relative flex gap-3">
+              {/* Buddy mode feedback - overlaid above buttons */}
+              {buddyMode && lastFeedback && (lastFeedback.buttonType === 'fold' || lastFeedback.buttonType === 'check-call') && (
+                <div className="absolute bottom-full left-0 right-0 mb-2 z-20">
+                  <FeedbackCallout
+                    feedback={lastFeedback}
+                    buttonType={lastFeedback.buttonType}
+                    raiseBtnCount={betSizes.length}
+                  />
+                </div>
+              )}
+              <div className="flex-1">
                 <button
                   onClick={() => handleAction('fold')}
                   aria-label="Fold hand"
@@ -413,12 +459,7 @@ export function AnalysisMode({ onExit }: AnalysisModeProps) {
                 </button>
               </div>
 
-              {/* Check/Call button */}
-              <div className="flex-1 relative">
-                <FeedbackCallout
-                  show={buddyMode && lastFeedback?.buttonType === 'check-call'}
-                  feedback={lastFeedback}
-                />
+              <div className="flex-1">
                 <button
                   onClick={() => handleAction(canCheck ? 'check' : 'call')}
                   aria-label={canCheck ? 'Check' : `Call ${hand?.toCall || 0} dollars`}
@@ -430,13 +471,19 @@ export function AnalysisMode({ onExit }: AnalysisModeProps) {
             </div>
 
             {/* Bet/Raise/Re-raise options */}
-            <div className="flex gap-3">
-              {betSizes.map((size, index) => (
-                <div key={size.label} className="flex-1 relative">
+            <div className="relative flex gap-3">
+              {/* Buddy mode feedback - overlaid above buttons */}
+              {buddyMode && lastFeedback && lastFeedback.buttonType.startsWith('raise') && (
+                <div className="absolute bottom-full left-0 right-0 mb-2 z-20">
                   <FeedbackCallout
-                    show={buddyMode && lastFeedback?.buttonType === `raise-${index}`}
                     feedback={lastFeedback}
+                    buttonType={lastFeedback.buttonType}
+                    raiseBtnCount={betSizes.length}
                   />
+                </div>
+              )}
+              {betSizes.map((size, index) => (
+                <div key={size.label} className="flex-1">
                   <button
                     onClick={() => handleAction(canCheck ? 'bet' : 'raise', size.amount, index)}
                     aria-label={size.isAllIn ? `All in ${size.amount} dollars` : `${raiseLabel} ${size.amount} dollars, ${size.label}`}
@@ -596,6 +643,31 @@ export function AnalysisMode({ onExit }: AnalysisModeProps) {
                   />
                 </button>
               </div>
+
+              {/* Pot Odds */}
+              <div className="flex items-center justify-between">
+                <div id="pot-odds-label">
+                  <div className="font-medium">Pot Odds</div>
+                  <div className="text-sm text-gray-500 dark:text-gray-400">
+                    Show pot odds when facing a bet
+                  </div>
+                </div>
+                <button
+                  role="switch"
+                  aria-checked={showPotOdds}
+                  aria-labelledby="pot-odds-label"
+                  onClick={() => setShowPotOdds(!showPotOdds)}
+                  className={`relative w-12 h-7 min-w-[48px] rounded-full transition-colors ${
+                    showPotOdds ? 'bg-green-500' : 'bg-gray-300 dark:bg-gray-600'
+                  }`}
+                >
+                  <div
+                    className={`absolute top-1 w-5 h-5 bg-white rounded-full shadow transition-transform ${
+                      showPotOdds ? 'translate-x-6' : 'translate-x-1'
+                    }`}
+                  />
+                </button>
+              </div>
             </div>
 
             <button
@@ -650,20 +722,27 @@ function Header({
 }
 
 function FeedbackCallout({
-  show,
   feedback,
+  buttonType,
+  raiseBtnCount,
 }: {
-  show: boolean
-  feedback: { type: 'correct' | 'warning' | 'error'; message: string } | null
+  feedback: { type: 'correct' | 'warning' | 'error'; message: string }
+  buttonType: 'fold' | 'check-call' | 'raise-0' | 'raise-1' | 'raise-2'
+  raiseBtnCount: number
 }) {
-  if (!show || !feedback) return null
-
   const bgColor =
     feedback.type === 'correct'
       ? 'bg-green-500'
       : feedback.type === 'warning'
         ? 'bg-yellow-500'
         : 'bg-red-500'
+
+  const arrowColor =
+    feedback.type === 'correct'
+      ? 'border-t-green-500'
+      : feedback.type === 'warning'
+        ? 'border-t-yellow-500'
+        : 'border-t-red-500'
 
   const icon =
     feedback.type === 'correct'
@@ -672,26 +751,88 @@ function FeedbackCallout({
         ? '\u26A0\uFE0F'
         : '\u274C'
 
+  // Arrow position: percentage from left based on which button was pressed
+  // Top row: 2 buttons — fold at 25%, check-call at 75%
+  // Bottom row: N buttons — raise-i at (i + 0.5) / N * 100%
+  let arrowPercent: number
+  if (buttonType === 'fold') {
+    arrowPercent = 25
+  } else if (buttonType === 'check-call') {
+    arrowPercent = 75
+  } else {
+    const index = parseInt(buttonType.split('-')[1])
+    arrowPercent = ((index + 0.5) / raiseBtnCount) * 100
+  }
+
   return (
-    <div
-      className={`absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-20 animate-bounce-in`}
-    >
+    <div className="relative w-full animate-bounce-in">
       <div
-        className={`${bgColor} text-white px-4 py-2 rounded-xl shadow-lg whitespace-nowrap flex items-center gap-2`}
+        className={`${bgColor} text-white px-4 py-2 rounded-xl shadow-lg text-center`}
       >
-        <span className="text-lg">{icon}</span>
-        <span className="text-sm font-semibold">{feedback.message}</span>
+        <span className="text-sm font-semibold">{icon} {feedback.message}</span>
       </div>
-      {/* Arrow pointing down */}
+      {/* Arrow pointing down at the pressed button */}
       <div
-        className={`absolute top-full left-1/2 -translate-x-1/2 w-0 h-0 border-l-8 border-r-8 border-t-8 border-transparent ${
-          feedback.type === 'correct'
-            ? 'border-t-green-500'
-            : feedback.type === 'warning'
-              ? 'border-t-yellow-500'
-              : 'border-t-red-500'
-        }`}
+        className={`absolute top-full w-0 h-0 border-l-8 border-r-8 border-t-8 border-transparent -translate-x-1/2 ${arrowColor}`}
+        style={{ left: `${arrowPercent}%` }}
       />
+    </div>
+  )
+}
+
+function PotOddsWidget({
+  pot,
+  toCall,
+  heroCards,
+  board,
+  street,
+}: {
+  pot: number
+  toCall: number
+  heroCards: [string, string]
+  board: string[]
+  street: string
+}) {
+  const odds = calculatePotOdds(pot, toCall)
+  const outsResult = street !== 'preflop' && street !== 'river' && street !== 'showdown'
+    ? calculateOuts(heroCards, board)
+    : null
+  const streetsLeft = street === 'flop' ? 2 : 1
+  const equity = outsResult && outsResult.total > 0
+    ? Math.min(outsResult.total * (streetsLeft === 2 ? 4 : 2), 100)
+    : null
+
+  const hasContent = (toCall > 0) || (outsResult && outsResult.draws.length > 0)
+  if (!hasContent) return null
+
+  return (
+    <div className="flex justify-center mb-4">
+      <div className="inline-flex flex-col items-center gap-2 bg-white/10 backdrop-blur rounded-lg px-4 py-2 text-sm">
+        {/* Outs row */}
+        {outsResult && outsResult.draws.length > 0 && (
+          <div className="flex items-center gap-3">
+            <span className="font-bold text-white">{outsResult.total} outs</span>
+            <span className="text-white/50">—</span>
+            <span className="text-white/80">
+              {outsResult.draws.map(d => d.name).join(', ')}
+            </span>
+            {equity !== null && (
+              <>
+                <span className="text-white/50">—</span>
+                <span className="font-bold text-green-400">~{equity}%</span>
+              </>
+            )}
+          </div>
+        )}
+        {/* Pot odds row - only when facing a bet */}
+        {toCall > 0 && (
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-white/60">Need</span>
+            <span className="font-bold text-yellow-400">{odds}%</span>
+            <span className="text-xs text-white/60">to call ${toCall}</span>
+          </div>
+        )}
+      </div>
     </div>
   )
 }
@@ -732,7 +873,7 @@ function ActionFeed({ actions }: { actions: ActionEntry[] }) {
   return (
     <div>
       <h3 className="font-semibold text-sm mb-3 text-white/70">Action History</h3>
-      <div className="space-y-3 max-h-80 overflow-y-auto text-sm">
+      <div className="space-y-3 text-sm">
         {streets.map((street) => {
           const streetActions = groupedActions[street]
           if (!streetActions || streetActions.length === 0) return null

@@ -28,8 +28,8 @@ export function CategorySection({
       <div className="flex items-center gap-3 mb-4">
         <div className={`w-3 h-3 rounded-full ${colorMap[category.color]}`} />
         <div>
-          <h2 className="text-xl font-bold">{category.title}</h2>
-          <p className="text-sm text-gray-500 dark:text-gray-400">
+          <h2 className="text-xl font-bold text-white">{category.title}</h2>
+          <p className="text-sm text-white/70">
             {category.description} &middot; {completedCount}/{category.lessons.length}{' '}
             completed
           </p>
@@ -37,7 +37,7 @@ export function CategorySection({
       </div>
 
       {/* Lessons */}
-      <div className="space-y-3 pl-6 border-l-2 border-gray-200 dark:border-gray-700 ml-1">
+      <div className="space-y-3 pl-6 border-l-2 border-white/20 ml-1">
         {category.lessons.map((lesson, index) => {
           const isCompleted = completedLessons.includes(lesson.id)
           // Lock if previous lesson in same category not completed (except first)

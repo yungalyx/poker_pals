@@ -6,7 +6,7 @@ export const intermediateLessons = [
     category: 'intermediate',
     topic: 'bluffing',
     title: 'When to Bluff',
-    description: 'Learn profitable bluffing spots',
+    description: 'Can you win with nothing?',
     order: 1,
     xpReward: 100,
     intro: {
@@ -40,7 +40,7 @@ export const intermediateLessons = [
       {
         id: 'bl-2',
         type: 'action',
-        question: 'Flop is Q-7-2 rainbow. You have 6-5 offsuit (complete air). Villain checks. Should you c-bet bluff?',
+        question: 'Flop is Q-7-2 rainbow. You have 6-5 offsuit (nothing). Villain checks. Should you c-bet bluff?',
         scenario: {
           heroCards: ['6d', '5c'],
           board: ['Qh', '7s', '2c'],
@@ -78,7 +78,7 @@ export const intermediateLessons = [
       {
         id: 'bl-4',
         type: 'action',
-        question: 'Villain is a calling station who never folds. You have air on the river. Bluff?',
+        question: 'Villain is a calling station who never folds. You have nothing on the river. Bluff?',
         scenario: {
           heroCards: ['9h', '8h'],
           board: ['Kd', 'Qs', '4c', '2h', '6d'],
@@ -116,7 +116,7 @@ export const intermediateLessons = [
     category: 'intermediate',
     topic: 'positioning',
     title: 'Position is Power',
-    description: 'Why acting last is a huge advantage',
+    description: 'Why does the dealer always win?',
     order: 2,
     xpReward: 100,
     intro: {

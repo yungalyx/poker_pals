@@ -6,7 +6,7 @@ export const basicsLessons = [
     category: 'basics',
     topic: 'card-strength',
     title: 'Hand Rankings',
-    description: 'Learn which hands beat which',
+    description: 'Does a flush beat a straight?',
     order: 1,
     xpReward: 50,
     intro: {
@@ -29,8 +29,8 @@ export const basicsLessons = [
           board: ['7d', '4c', '2s', 'Jh', '9c'],
         },
         options: [
-          { id: 'a', label: 'Player A (Pair of Aces)' },
-          { id: 'b', label: 'Player B (Pair of Kings)' },
+          { id: 'a', label: 'Player A' },
+          { id: 'b', label: 'Player B' },
         ],
         correctAnswer: 'a',
         explanation: 'A pair of Aces beats a pair of Kings. Aces are the highest card in poker.',
@@ -45,8 +45,8 @@ export const basicsLessons = [
           board: ['7d', '4c', '2s', 'Jh', '3c'],
         },
         options: [
-          { id: 'a', label: 'Player A (Pair of 9s)' },
-          { id: 'b', label: 'Player B (Ace high)' },
+          { id: 'a', label: 'Player A' },
+          { id: 'b', label: 'Player B' },
         ],
         correctAnswer: 'a',
         explanation: 'Any pair beats no pair. Even though Ace-King looks pretty, a pair of 9s wins here.',
@@ -61,8 +61,8 @@ export const basicsLessons = [
           board: ['Kd', '6c', 'Kh', '2s', '9c'],
         },
         options: [
-          { id: 'a', label: 'Player A (Three Kings)' },
-          { id: 'b', label: 'Player B (Full House)' },
+          { id: 'a', label: 'Player A' },
+          { id: 'b', label: 'Player B' },
         ],
         correctAnswer: 'b',
         explanation: 'Full house beats three of a kind. Player B has 6s full of Kings (three 6s + two Kings).',
@@ -94,8 +94,8 @@ export const basicsLessons = [
           board: ['7h', 'Ac', 'As', '2d', '4c'],
         },
         options: [
-          { id: 'a', label: 'Player A (Three Aces)' },
-          { id: 'b', label: 'Player B (Full House)' },
+          { id: 'a', label: 'Player A' },
+          { id: 'b', label: 'Player B' },
         ],
         correctAnswer: 'b',
         explanation: 'Full house always beats three of a kind. Player B has 7s full of Aces.',
@@ -153,7 +153,7 @@ export const basicsLessons = [
     category: 'basics',
     topic: 'card-strength',
     title: 'Outs & Equity',
-    description: 'Calculate your chances to improve',
+    description: 'How likely is your draw to hit?',
     order: 2,
     xpReward: 75,
     intro: {
@@ -319,7 +319,7 @@ export const basicsLessons = [
     category: 'basics',
     topic: 'pot-odds',
     title: 'Pot Odds 101',
-    description: 'Make profitable decisions with simple math',
+    description: 'Is this call worth it?',
     order: 3,
     xpReward: 75,
     intro: {
@@ -473,7 +473,7 @@ export const basicsLessons = [
     category: 'basics',
     topic: 'bet-sizing',
     title: 'Bet Sizing Basics',
-    description: 'Learn when to bet small, medium, or big',
+    description: 'Why did they bet so big?',
     order: 4,
     xpReward: 75,
     intro: {
@@ -591,7 +591,7 @@ export const basicsLessons = [
     category: 'basics',
     topic: 'preflop',
     title: 'Preflop Decisions',
-    description: 'Starting hands, raises, and all-ins',
+    description: 'Should you play that hand?',
     order: 5,
     xpReward: 100,
     intro: {

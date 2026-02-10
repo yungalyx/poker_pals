@@ -6,7 +6,7 @@ export const advancedLessons = [
     category: 'advanced',
     topic: 'bankroll',
     title: 'Bankroll 101',
-    description: 'Protect your money, play the right stakes',
+    description: 'Why do good players go broke?',
     order: 1,
     xpReward: 125,
     intro: {
@@ -107,7 +107,7 @@ export const advancedLessons = [
     category: 'advanced',
     topic: 'bankroll',
     title: 'Understanding Variance',
-    description: 'Why good decisions sometimes lose',
+    description: 'Did the right play just lose you money?',
     order: 2,
     xpReward: 125,
     intro: {

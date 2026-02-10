@@ -239,7 +239,7 @@ export function AnalysisSummary({ analysis, onNewSession, onExit }: AnalysisSumm
 
         {/* Player Profile */}
         <div className="opacity-0 animate-fade-in-up animation-delay-400">
-          <PlayerProfile vpip={playStyle.vpip} pfr={playStyle.pfr} aggression={playStyle.aggression} />
+          <PlayerProfile analysis={analysis} />
         </div>
 
         {/* Play style */}
@@ -284,9 +284,21 @@ export function AnalysisSummary({ analysis, onNewSession, onExit }: AnalysisSumm
               idealMax={25}
               tooltip="How often you raise before the flop. Higher PFR means you enter pots with aggression rather than just calling."
             />
+            <StyleSpectrum
+              label="Transparency"
+              value={analysis.transparencyScore.tScore}
+              min={0}
+              max={100}
+              leftLabel="Deceptive"
+              centerLabel="Balanced"
+              rightLabel="Transparent"
+              idealMin={35}
+              idealMax={65}
+              tooltip="Measures how closely your bet sizing correlates with hand strength. Transparent players bet big with strong hands and small with weak hands. Deceptive players disguise their hand strength."
+            />
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
             <StatBox
               label="VPIP"
               value={`${playStyle.vpip}%`}
@@ -309,17 +321,18 @@ export function AnalysisSummary({ analysis, onNewSession, onExit }: AnalysisSumm
               tooltip="The ratio of aggressive actions (bets and raises) to passive actions (calls). Higher aggression puts pressure on opponents. Below 1 means you call more than you bet/raise."
             />
             <StatBox
-              label="Style"
-              value={
-                playStyle.vpip > 40
-                  ? 'Loose'
-                  : playStyle.vpip < 20
-                    ? 'Tight'
-                    : 'Balanced'
-              }
-              description="Overall tendency"
-              ideal="Balanced"
-              tooltip="Your overall playing style based on VPIP. Loose players play many hands, tight players are selective. Balanced is typically optimal for most situations."
+              label="T-Score"
+              value={`${analysis.transparencyScore.tScore}`}
+              description="Transparency Index"
+              ideal="40-60"
+              tooltip="Measures how closely your bet sizing correlates with hand strength. High = transparent (predictable). Low = deceptive (hard to read). A balanced T-Score around 40-60 is ideal."
+            />
+            <StatBox
+              label="Archetype"
+              value={analysis.playerArchetype.abbrev}
+              description={analysis.playerArchetype.archetype}
+              ideal="The Enigma"
+              tooltip={analysis.playerArchetype.description}
             />
           </div>
         </div>
@@ -548,74 +561,59 @@ function StatBox({
 }
 
 function PlayerProfile({
-  vpip,
-  pfr,
-  aggression,
+  analysis,
 }: {
-  vpip: number
-  pfr: number
-  aggression: number
+  analysis: AnalysisResult
 }) {
-  // Determine player type based on VPIP and aggression
-  const isLoose = vpip > 30
-  const isTight = vpip < 22
-  const isAggressive = pfr > 15 || aggression > 1.5
-  const isPassive = pfr < 12 && aggression < 1.2
-
-  let playerType: string
-  let typeAbbrev: string
-  let typeColor: string
-  let typeDescription: string
-  let typeAdvice: string
-
-  if (isLoose && isAggressive) {
-    playerType = 'Loose Aggressive'
-    typeAbbrev = 'LAG'
-    typeColor = 'bg-red-500'
-    typeDescription = 'You play many hands and play them aggressively with lots of bets and raises.'
-    typeAdvice = 'LAG is a powerful but high-variance style. Make sure your aggression is selective and you have good hand reading skills.'
-  } else if (isTight && isAggressive) {
-    playerType = 'Tight Aggressive'
-    typeAbbrev = 'TAG'
-    typeColor = 'bg-green-500'
-    typeDescription = 'You select strong hands and play them aggressively. This is considered the most profitable style.'
-    typeAdvice = 'TAG is the gold standard for winning poker. Keep it up, but occasionally mix in some bluffs to stay unpredictable.'
-  } else if (isLoose && isPassive) {
-    playerType = 'Loose Passive'
-    typeAbbrev = 'LP'
-    typeColor = 'bg-yellow-500'
-    typeDescription = 'You play many hands but mostly call rather than bet or raise. Often called a "calling station".'
-    typeAdvice = 'This style tends to lose money long-term. Try to be more selective with hands and raise more when you do play.'
-  } else if (isTight && isPassive) {
-    playerType = 'Tight Passive'
-    typeAbbrev = 'TP'
-    typeColor = 'bg-blue-500'
-    typeDescription = 'You play few hands and rarely raise. Sometimes called a "rock" or "nit".'
-    typeAdvice = 'While patient, this style misses value. When you have strong hands, bet and raise more to build the pot.'
-  } else {
-    // Balanced/Neutral
-    playerType = 'Balanced'
-    typeAbbrev = 'BAL'
-    typeColor = 'bg-purple-500'
-    typeDescription = 'Your play style falls between the extremes, making you harder to read.'
-    typeAdvice = 'A balanced style is good, but make sure you\'re adjusting to your opponents rather than playing the same way against everyone.'
-  }
+  const { playStyle, transparencyScore, playerArchetype } = analysis
+  const { vpip, aggression } = playStyle
 
   return (
     <div className="bg-gray-100 dark:bg-gray-800/50 rounded-2xl p-6 shadow-sm border border-gray-200 dark:border-gray-700 card-hover">
       <h3 className="font-semibold mb-4 text-lg">Player Profile</h3>
 
       <div className="flex items-center gap-4 mb-4">
-        {/* Type badge */}
-        <div className={`${typeColor} text-white rounded-2xl px-6 py-4 text-center min-w-[120px] shadow-lg`}>
-          <div className="text-3xl font-bold">{typeAbbrev}</div>
-          <div className="text-xs opacity-90 mt-1">{playerType}</div>
+        {/* Archetype badge */}
+        <div className={`${playerArchetype.color} text-white rounded-2xl px-6 py-4 text-center min-w-[120px] shadow-lg`}>
+          <div className="text-3xl font-bold">{playerArchetype.abbrev}</div>
+          <div className="text-xs opacity-90 mt-1">{playerArchetype.archetype}</div>
         </div>
 
         {/* Description */}
         <div className="flex-1">
-          <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">{typeDescription}</p>
+          <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">{playerArchetype.description}</p>
         </div>
+      </div>
+
+      {/* Three-dimension breakdown */}
+      <div className="grid grid-cols-3 gap-3 mb-4">
+        <DimensionBadge
+          label="Selection"
+          value={playerArchetype.dimensions.tightLoose}
+          colors={{
+            tight: 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300',
+            loose: 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300',
+            balanced: 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300',
+          }}
+        />
+        <DimensionBadge
+          label="Aggression"
+          value={playerArchetype.dimensions.aggressivePassive}
+          colors={{
+            aggressive: 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300',
+            passive: 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300',
+            balanced: 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300',
+          }}
+        />
+        <DimensionBadge
+          label="Transparency"
+          value={playerArchetype.dimensions.deceptiveTransparent}
+          colors={{
+            transparent: 'bg-cyan-100 dark:bg-cyan-900/30 text-cyan-700 dark:text-cyan-300',
+            deceptive: 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300',
+            balanced: 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300',
+          }}
+        />
       </div>
 
       {/* Quadrant visualization */}
@@ -627,13 +625,13 @@ function PlayerProfile({
               Tight Passive
             </div>
             <div className="bg-green-100 dark:bg-green-900/30 rounded-tr-lg flex items-center justify-center text-xs text-green-600 dark:text-green-400 font-medium p-1">
-              Tight Aggressive (TAG)
+              Tight Aggressive
             </div>
             <div className="bg-yellow-100 dark:bg-yellow-900/30 rounded-bl-lg flex items-center justify-center text-xs text-yellow-600 dark:text-yellow-400 font-medium p-1">
               Loose Passive
             </div>
             <div className="bg-red-100 dark:bg-red-900/30 rounded-br-lg flex items-center justify-center text-xs text-red-600 dark:text-red-400 font-medium p-1">
-              Loose Aggressive (LAG)
+              Loose Aggressive
             </div>
           </div>
 
@@ -641,13 +639,10 @@ function PlayerProfile({
           <div
             className="absolute w-4 h-4 bg-gray-900 dark:bg-white rounded-full border-2 border-white dark:border-gray-900 shadow-lg transform -translate-x-1/2 -translate-y-1/2 z-10 transition-colors duration-1000 ease-out"
             style={{
-              // X: left = passive, right = aggressive (scale 0-4 aggression to 0-100%)
               left: `${Math.min(Math.max((aggression / 4) * 100, 5), 95)}%`,
-              // Y: top = tight (low VPIP), bottom = loose (high VPIP)
               top: `${Math.min(Math.max((vpip / 70) * 100, 5), 95)}%`,
             }}
           >
-            {/* Pulse ring */}
             <div className="absolute inset-0 rounded-full bg-gray-900 dark:bg-white animate-ping opacity-20" />
           </div>
 
@@ -661,13 +656,55 @@ function PlayerProfile({
         </div>
       </div>
 
+      {/* T-Score gauge */}
+      <div className="bg-white dark:bg-gray-900 rounded-2xl p-4 mb-4 shadow-sm border border-gray-100 dark:border-gray-800">
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-sm font-medium">Transparency Index</span>
+          <span className="text-sm font-bold">{transparencyScore.tScore}/100</span>
+        </div>
+        <div className="relative h-6 rounded-full overflow-hidden bg-gradient-to-r from-amber-400 via-purple-400 to-cyan-400 shadow-inner">
+          <div
+            className="absolute top-0 bottom-0 w-1.5 bg-gray-900 dark:bg-white shadow-lg rounded-full transition-all duration-700 ease-out"
+            style={{ left: `calc(${Math.min(Math.max(transparencyScore.tScore, 2), 98)}% - 3px)` }}
+          >
+            <div className="absolute -top-2 left-1/2 -translate-x-1/2 w-0 h-0 border-l-[5px] border-r-[5px] border-b-[8px] border-transparent border-b-gray-900 dark:border-b-white" />
+          </div>
+        </div>
+        <div className="flex justify-between mt-2">
+          <span className="text-xs text-gray-500 dark:text-gray-400 font-medium">Deceptive</span>
+          <span className="text-xs text-gray-500 dark:text-gray-400 font-medium">Transparent</span>
+        </div>
+        {transparencyScore.confidence === 'low' && (
+          <p className="text-xs text-gray-400 dark:text-gray-500 mt-2 text-center italic">
+            Play more hands for a more accurate transparency reading
+          </p>
+        )}
+      </div>
+
       {/* Advice */}
       <div className="bg-gradient-to-r from-blue-50 to-blue-100/50 dark:from-blue-900/30 dark:to-blue-900/10 rounded-2xl p-4 border border-blue-100 dark:border-blue-800">
         <div className="flex items-start gap-4">
           <span className="text-blue-500 text-lg">{'\u{1F4A1}'}</span>
-          <p className="text-sm text-blue-800 dark:text-blue-300 leading-relaxed">{typeAdvice}</p>
+          <p className="text-sm text-blue-800 dark:text-blue-300 leading-relaxed">{playerArchetype.advice}</p>
         </div>
       </div>
+    </div>
+  )
+}
+
+function DimensionBadge({
+  label,
+  value,
+  colors,
+}: {
+  label: string
+  value: string
+  colors: Record<string, string>
+}) {
+  return (
+    <div className={`rounded-xl p-3 text-center ${colors[value] || colors['balanced']}`}>
+      <div className="text-xs font-medium opacity-70">{label}</div>
+      <div className="text-sm font-bold capitalize">{value}</div>
     </div>
   )
 }

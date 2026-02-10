@@ -1,249 +1,57 @@
-# Poker Pals - Implementation Plan
+# The Transparency Index: An Implementation Guide
 
-## Vision
-A Duolingo-style poker learning app that teaches GTO (Game Theory Optimal) poker through interactive puzzles and challenges.
+This guide refines the traditional, often surface-level poker binaries into a sophisticated Transparency Index. While the industry standards—Tight/Loose and Aggressive/Passive—tell you *how much* a player bets, they fail to reveal the *integrity* of those bets.
 
----
+By implementing the following logic, a poker engine can move beyond "what" a player is doing and begin to calculate "why," allowing for a much higher level of exploitative play.
 
-## Learning Categories
+## The Core Logic
 
-### 1. Basics
-- **Card Strength** - Understanding hand rankings, relative hand strength
-- **Outs & Equity** - Counting outs, Rule of 2 and 4
-- **Pot Odds** - Calculating odds, making +EV decisions
-- **Bet Sizing** - Fundamental sizing (1/3, 2/3, full pot)
-- **Preflop Decisions** - Starting hands, raises, all-ins, preflop chart
+The Transparency Index measures the correlation between **perceived strength** (betting) and **actual strength** (cards). In a perfectly transparent player, the two values move in lockstep. In a deceptive player, the engine will find significant "noise" or intentional divergence between the two.
 
-### 2. Intermediate
-- **Bluffing** - When to bluff, blockers, calling stations
-- **Positioning** - Button advantage, acting last, position-based play
+## Phase 1: Data Collection (The Observation)
 
-### 3. Advanced
-- **Bankroll Management** - Risk of ruin, stake selection
-- **Understanding Variance** - Process over results, sample size
+The engine only records data when a hand reaches **Showdown** (cards are revealed). For every showdown, the engine stores two values:
 
----
+- **Actual Strength ($S$):** A numerical rank of the player's hand (0.0 to 1.0) relative to all possible hands on that board.
+- **Perceived Strength ($P$):** A numerical value derived from the player's betting actions (total money put in relative to the pot size).
 
-## Puzzle/Lesson Format
+## Phase 2: The Three-Pillar Calculation
 
-Each lesson presents a poker scenario and tests the user's decision-making:
+To create a reliable score, the engine must track three distinct variables:
 
-### Puzzle Types
+### Variable A: The Linearity Check (The "Money" Pillar)
 
-| Type | Description | Metrics |
-|------|-------------|---------|
-| **Bet Sizing** | Given a scenario, choose the correct bet size | Accuracy, reasoning |
-| **Fold/Call/Raise** | Action decision puzzles | Decision quality |
-| **Spot the Mistake** | Identify errors in a played hand | Pattern recognition |
-| **Pot Odds Quiz** | Calculate if a call is profitable | Math accuracy |
-| **Range Construction** | Build appropriate ranges for positions | GTO alignment |
+- **Logic:** Does the investment match the hand?
+- **The Math:** Calculate the Correlation Coefficient between the final hand strength and the percentage of the pot the player contributed.
+- **Insight:** If the player puts in 80% of the pot with "The Nuts" and 10% with "Middle Pair" consistently, their Linearity Score is high.
 
-### Lesson Structure
-```
-Lesson
-├── Intro (concept explanation)
-├── Examples (worked scenarios)
-├── Puzzles (3-5 interactive challenges)
-└── Summary (key takeaways)
-```
+### Variable B: The Polarization Gap (The "Bluff" Pillar)
 
----
+- **Logic:** Does the player ever use big bets for weak hands?
+- **The Math:** Look at all bets above a certain threshold (e.g., >70% of the pot). Identify the "Strength Gap."
+- **Insight:** If the player's big bets are only in the 0.9–1.0 strength range, they are **Transparent**. If their big bets are in the 0.9–1.0 range AND the 0.0–0.2 range, they are **Deceptive** (Balanced).
 
-## Data Models
+### Variable C: Timing & Board Texture (The "Story" Pillar)
 
-### Lesson
-```typescript
-interface Lesson {
-  id: string
-  category: 'basics' | 'intermediate' | 'advanced'
-  topic: string
-  title: string
-  order: number
-  puzzles: Puzzle[]
-}
-```
+- **Logic:** Does the player "tell the truth" when the board changes?
+- **The Math:** Track the player's aggression on "Scare Cards" (e.g., a third heart hits the board).
+- **Insight:** If a player only bets when a scare card hits their actual hand, they are **Transparent**. If they bet the scare card regardless of their hand to represent a flush, they are **Deceptive**.
 
-### Puzzle
-```typescript
-interface Puzzle {
-  id: string
-  type: 'bet-sizing' | 'action' | 'pot-odds' | 'spot-mistake' | 'range'
-  scenario: PokerScenario
-  question: string
-  options: Option[]
-  correctAnswer: string
-  explanation: string
-}
-```
+## Phase 3: The Scoring System (The "T-Score")
 
-### Poker Scenario
-```typescript
-interface PokerScenario {
-  heroPosition: Position
-  heroCards: [Card, Card]
-  board: Card[]  // 0-5 cards (preflop to river)
-  potSize: number
-  stackSize: number
-  villainAction?: string
-  previousAction?: string[]
-}
-```
+The engine aggregates these into a single **T-Score (0–100)**:
 
-### User Progress
-```typescript
-interface UserProgress {
-  odompletedLessons: string[]
-  puzzleResults: {
-    puzzleId: string
-    correct: boolean
-    attempts: number
-  }[]
-  streakDays: number
-  totalXP: number
-}
-```
+- **Weighting:** Linearity (60%), Polarization (30%), Board Texture (10%).
+- **Decay Rate:** Use a "Weighted Moving Average" so that recent hands carry more weight than hands from three hours ago.
 
----
+## Phase 4: Strategy Trigger (The "Exploit")
 
-## Tech Stack
+| T-Score | Classification    | The Engine's "Move"                                                                                                           |
+| ------- | ----------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| 85+     | The Glass House    | **Max Exploit:** If they bet, fold anything that isn't the nuts. If they check, bet 100% of your range.                       |
+| 40–60   | The Solid Pro      | **Equilibrium:** Stop trying to read them. Play "perfect" poker based on your own cards and the math.                         |
+| <20     | The Illusionist    | **Anti-Leveling:** This player is actively trying to trick you. Do not fold to their big bets as often as the "math" suggests. |
 
-- **Framework**: Next.js 14+ (App Router)
-- **Styling**: Tailwind CSS
-- **State**: React Context (local progress) → migrate to DB later
-- **Storage**: localStorage for MVP → Postgres later
-- **Animations**: Framer Motion (Duolingo-style feedback)
+## Summary
 
----
-
-## Core Components
-
-```
-src/
-├── app/
-│   ├── page.tsx                 # Home / category selection
-│   ├── learn/
-│   │   └── [category]/
-│   │       ├── page.tsx         # Lesson list for category
-│   │       └── [lessonId]/
-│   │           └── page.tsx     # Puzzle view
-│   └── progress/
-│       └── page.tsx             # Stats & achievements
-├── components/
-│   ├── poker/
-│   │   ├── Card.tsx             # Playing card display
-│   │   ├── Hand.tsx             # Two-card hand
-│   │   ├── Board.tsx            # Community cards
-│   │   └── Table.tsx            # Full table visualization
-│   ├── puzzles/
-│   │   ├── BetSizingPuzzle.tsx
-│   │   ├── ActionPuzzle.tsx
-│   │   ├── PotOddsPuzzle.tsx
-│   │   └── PuzzleResult.tsx     # Correct/wrong feedback
-│   ├── ui/
-│   │   ├── ProgressBar.tsx
-│   │   ├── XPCounter.tsx
-│   │   └── StreakBadge.tsx
-│   └── lessons/
-│       ├── LessonCard.tsx
-│       └── CategorySection.tsx
-├── lib/
-│   ├── poker/
-│   │   ├── hands.ts             # Hand evaluation
-│   │   ├── odds.ts              # Pot odds calculations
-│   │   └── ranges.ts            # Position ranges
-│   └── progress.ts              # Progress management
-├── data/
-│   └── lessons/
-│       ├── basics.ts
-│       ├── intermediate.ts
-│       └── advanced.ts
-└── types/
-    └── index.ts
-```
-
----
-
-## Gamification Elements
-
-- **XP System** - Earn points for correct answers
-- **Streaks** - Daily practice tracking
-- **Hearts/Lives** - Limited mistakes per session (optional)
-- **Progress Bars** - Visual completion tracking
-- **Celebrations** - Animations on correct answers
-- **Difficulty Scaling** - Harder puzzles unlock over time
-
----
-
----
-
-## Analysis Mode
-
-A simulation mode where users play real poker hands with dynamically dealt cards.
-
-### Features
-- **Dynamic cards** - Each hand is randomly dealt from a shuffled deck
-- **Goal-based** - Try to reach a profit target (default: $100)
-- **Full hand play** - Preflop through showdown with fold/check/call/raise/bet
-- **Villain AI** - Simplified opponent that bets and calls based on hand strength
-
-### Scoring Categories
-- **Preflop Decisions** - Correct opening and defending ranges
-- **Postflop Betting** - Value bets and correct sizing
-- **Folding Discipline** - Not chasing with bad pot odds
-- **Value Extraction** - Maximizing profit with strong hands
-- **Pot Odds Accuracy** - Calling when odds are good, folding when not
-
-### Play Style Analysis
-- **VPIP** - Voluntarily Put $ In Pot (ideal: 25-35%)
-- **PFR** - Preflop Raise % (ideal: 18-25%)
-- **Aggression** - Bets+Raises / Calls (ideal: 2-3)
-- **Style** - Loose/Tight/Balanced assessment
-
-### Post-Session Report
-- Overall decision score (0-100)
-- Score breakdown by category
-- Identified strengths
-- Areas for improvement
-- Personalized recommendations
-
----
-
-## MVP Scope (Phase 1)
-
-### Include
-- [ ] Home screen with 3 category cards
-- [ ] 2-3 lessons per category (hardcoded data)
-- [ ] Basic puzzle types: bet-sizing + action decisions
-- [ ] Card/board visualization components
-- [ ] Correct/incorrect feedback with explanations
-- [ ] Local progress storage
-- [ ] Simple XP tracking
-
-### Exclude (Later)
-- Auth / user accounts
-- Database persistence
-- Multiplayer / challenges
-- Advanced analytics
-- Mobile app
-
----
-
-## Design Decisions
-
-1. **GTO Calibration** - Use simplified heuristics (not solver outputs). Teach principles with clear rules like "bet 2/3 pot with top pair on wet boards" rather than complex mixed strategies. Accurate enough to build good fundamentals.
-
-2. **Feedback Depth** - Very simple EV math. Show basic calculations like "Pot is $100, you need to call $25, so you need >20% equity to call" without deep solver analysis.
-
-3. **Art Style** - Minimal and simplistic card design. Clean, modern look.
-
-4. **Sound Effects** - Not yet. Add later if needed.
-
----
-
-## Next Steps
-
-1. Set up base UI components (Card, Hand, Board)
-2. Create puzzle component framework
-3. Build first lesson: "Hand Rankings" (basics)
-4. Implement local progress tracking
-5. Add gamification (XP, progress bars)
+By transitioning from traditional binaries to a Transparency Index, your engine stops viewing "Aggression" as a monolith. Instead, it identifies whether that aggression is an honest reflection of hand strength or a deceptive tool used to manipulate the pot. A player with a high T-Score—no matter how aggressive they appear—is effectively playing with their cards face-up.
